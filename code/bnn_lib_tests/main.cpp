@@ -62,6 +62,9 @@ using namespace cv;
 
 unsigned int WINDOW_WIDTH;
 unsigned int WINDOW_HEIGHT;
+unsigned int g_win_step;
+unsigned int g_win_length;
+float lambda;
 
 const std::string USER_DIR = "/home/xilinx/jose_bnn/bnn_lib_tests/";
 const std::string BNN_PARAMS = USER_DIR + "params/cifar10/";
@@ -134,60 +137,32 @@ inline std::vector<float> normalise(std::vector<T> &vec)
 	return cp;
 }
 
+/*
+	Calculate certainty
+
+	@para arg_vec: input vector with floating points
+	@return vector [e^(class1 probability)/sum, e^(class2 probability)/sum... e^(class10 probability)/sum], where sum = summation of e^(class probability) of all the classes
+*/
 template<typename T>
-vector<float> calculate_certainty(std::vector<T> &vec, int certainty_spread)
+vector<float> calculate_certainty(std::vector<T> &arg_vec)
 {
 	// Normalise the vector
-	//vector<float> classPropabilities;
-	std::vector<float> norm_vec = normalise(vec);
+	std::vector<float> norm_vec = normalise(arg_vec);
 	float mx = *max_element(std::begin(norm_vec), std::end(norm_vec));
-
 	float sum = 0;
 	for(auto const &elem : norm_vec)
-		sum += exp(elem);	//		sum += std::pow(elem, certainty_spread);
+		sum += exp(elem);
 	
 	if(sum == 0){
 		std::cout << "Division by zero, sum = 0" << std::endl;
-		//return -1;
 	}
 	// Try to use OpenMP
 	for(int i=0; i<10;i++)
 	{
 		norm_vec[i] = exp(norm_vec[i]) / sum;
-		//cout << exp(elem*10) / sum << " ";
 	}
-	//cout << endl;
-	
-	// Max element = 1 / sum 
-	return norm_vec;		//exp(mx*10) / sum;
-	
-	/*
-	// Copy vector
-	std::vector<int> vec2;
-	for(auto const &elem : vec)
-	{
-		vec2.push_back(elem);
-	}
-	
-	// Smallest first
-	std::sort(vec2.begin(), vec2.end());
-	
-	//int big_gap = vec2[vec2.size() -1] - vec2[0];
-	//int small_gap = vec2[vec2.size() -1] - vec2[vec2.size() -2];
 
-
-	int big_gap = vec2[vec2.size() -1] - vec2[0];
-	int small_gap = vec2[vec2.size() -1] - vec2[vec2.size() -2];
-	
-	return (float)(small_gap^certainty_spread)/(float)big_gap;
-	*/
-	
-	
-	// Get soft-max
-	/*unsigned int index = getMaxIndex(vec);
-	std::cout << "Max value = " << vec[index] << std::endl;
-	
-	return (float)vec[index]/(float)500;*/
+	return norm_vec;
 }
 
 
@@ -318,7 +293,36 @@ void helpMessage(int argc, char** argv)
 	cout << argv[4] << " BNN input frame size -- only for sw mode, 0 for full window" << endl;
 }
 
+/*
+	Smoothening out output
 
+	@para arg_count:
+	@para arg_results_history:
+	@para arg_weights
+	@return output
+*/
+int output_filter(int arg_count, std::vector<std::vector<float>> arg_results_history, std::vector<float> arg_weights){  	
+
+	cout << "output filer starts here" << endl;
+	if (arg_count < g_win_step){
+		std::vector<float> past_result = arg_results_history.rbegin()[arg_count];
+		return distance(past_result.begin(), max_element(past_result.begin(), past_result.end()));
+	}else if ( arg_count = g_win_step){
+
+		std::vector<float> adjusted_results(10, 0);
+		for(int i = 0; i < arg_results_history.size(); i++)
+		{ 
+			for(int j = 0; j < 10; j++)
+			{
+				adjusted_results[j] += (arg_weights[i] * arg_results_history[i][j]);
+			}
+		}
+		return distance(adjusted_results.begin(), max_element(adjusted_results.begin(), adjusted_results.end()));
+	}
+
+
+
+}
 
 int main(int argc, char** argv)
 {
@@ -340,14 +344,17 @@ int main(int argc, char** argv)
 		}
 	}
 	
-	else if(argc == 5)
+	else if(argc == 7)
 	{
+		//	./BNN sw 1 1000 128 5 12
 		if (strcmp(argv[1], "sw") == 0)
 		{
 			expected_class_num = atoi(argv[2]);
 			runFrames = atoi(argv[3]);
 			WINDOW_HEIGHT = atoi(argv[4]);
 			WINDOW_WIDTH = atoi(argv[4]);
+			g_win_step = atoi(argv[5]);//5
+			g_win_length = atoi(argv[6]);//12
 			if (WINDOW_HEIGHT == 0)
 				smallWindow = 0; 
 			else 
@@ -612,6 +619,7 @@ int calssifyCameraFrames2()
 	std::vector<uint8_t> bgr;
 	vector<float> certainty;
 	cv::Mat reducedSizedFrame(32, 32, CV_8UC3);
+	unsigned int window_step_count = 0;
 
 	// # of ExtMemWords per input
 	const unsigned int psi = 384; //paddedSize(imgs.size()*inWidth, bitsPerExtMemWord) / bitsPerExtMemWord;
@@ -627,18 +635,17 @@ int calssifyCameraFrames2()
 	//ExtMemWord * packedOut = new ExtMemWord[(count * pso)];
 	ExtMemWord * packedOut = (ExtMemWord *)sds_alloc((count * pso)*sizeof(ExtMemWord));
 
-	// pre-calculate window length
-	int windowLength = 12;
-	std::vector<float> historyWeights;
-	std::vector<std::vector<float> > resultsHistory; // All its previous classifications
-	historyWeights.resize(windowLength);
+	std::vector<float> weights;
+	weights.resize(g_win_length);
+	std::vector<std::vector<float> > results_history; // All its previous classifications
+	int step_counts = 0;
 	float lambda = 0.2;
 	// Pre-populate history weights with exponential decays
-	for(int i = 0; i < windowLength; i++)
+	for(int i = 0; i < g_win_length; i++)
 	{
-		historyWeights[i] = expDecay(lambda, i);
+		weights[i] = expDecay(lambda, i);
 	}
-	std::cout << "history weights = "; print_vector(historyWeights); std::cout << std::endl;
+
 
 	Mat curFrame, capFrame;
 	string windowMode;
@@ -726,69 +733,50 @@ int calssifyCameraFrames2()
 			class_result.push_back(outTest[j]);
 		}		
 		output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));	
-		// Make decision based on multiple frames
-		certainty = calculate_certainty(class_result, certainty_spread);
-		//print_vector(certainty);
-		resultsHistory.insert(resultsHistory.begin(), certainty);
-		if (resultsHistory.size() > windowLength)
+
+
+		// Data Post Processing
+		//update result_history
+		results_history.insert(results_history.begin(), calculate_certainty(class_result));
+		if (results_history.size() > g_win_length)
 		{
-			resultsHistory.pop_back();
+			results_history.pop_back();
 		}
-		/*
-		// Print out the elements
-		for(int i=0;i<resultsHistory.size(); i++) {
-			for (int j=0;j<resultsHistory[i].size(); j++)
-				cout << resultsHistory[i][j] << " "; 
-			cout << endl;
-		}*/
-		// The current output is the maximum index of the weighted sum of current and previous outputs
-		std::vector<float> adjustedResults(number_class, 0);
-		for(int i = 0; i < resultsHistory.size(); i++)
-		{ // From most recent frame to oldest
-			for(int j = 0; j < number_class; j++)
-			{
-				adjustedResults[j] += (historyWeights[i] * resultsHistory[i][j]);
-			}
-		}
-		int adjustedOutput = distance(adjustedResults.begin(),max_element(adjustedResults.begin(), adjustedResults.end()));	
-		// Try to calculate certinty again for the adjustedOutput 
-		vector<float> propability = calculate_certainty(adjustedResults, certainty_spread);		
-		float max_result = *max_element(std::begin(propability), std::end(propability));
-		
-		auto t3 = chrono::high_resolution_clock::now();		
-		auto BNN_time = chrono::duration_cast<chrono::microseconds>( t3 - t2 ).count();
-		/*	
-		while(BNN_time < 8000)
-		{
-			t3 = chrono::high_resolution_clock::now();		
-			BNN_time = chrono::duration_cast<chrono::microseconds>( t3 - t2x ).count();
-		}	
-*/		  	
+
+		int adjusted_output = 0;
+		adjusted_output = output_filter(step_counts, results_history, weights);
+
+		// if (step_counts < g_win_step) {
+		// 	step_counts++;
+		// } else {
+		// 	step_counts = 0;
+		// }
+	  	
 		cout << "Output = " << classes[output] << endl;	
-		cout << "adjustedOutput = " << classes[adjustedOutput] << endl;	
+		cout << "Adjusted Output = " << classes[adjusted_output] << endl;	
 		
 		if ( expected_class_num == output)
 			ok++;
-		if ( expected_class_num == adjustedOutput)
+		if ( expected_class_num == adjusted_output)
 			ok_adjusted++;
 
 		std::cout << "frame number is: " << frameNum << std::endl;		
-		//auto capPreprocess_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-		cout << "capPreprocess_time :" << capPreprocess_time << " microseconds, " << 1000000/(float)capPreprocess_time << " FPS" << endl;
-		//auto BNN_time = chrono::duration_cast<chrono::microseconds>( t3 - t2 ).count();
-		cout << "BNN_time :" << BNN_time << " microseconds, " << 1000000/(float)BNN_time << " FPS" << endl;
-		auto total_time = chrono::duration_cast<chrono::microseconds>( t3 - t1 ).count();
-		cout << "total_time :" << total_time << " microseconds, " << 1000000/(float)total_time << " FPS" << endl;
+		// //auto capPreprocess_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
+		// cout << "capPreprocess_time :" << capPreprocess_time << " microseconds, " << 1000000/(float)capPreprocess_time << " FPS" << endl;
+		// //auto BNN_time = chrono::duration_cast<chrono::microseconds>( t3 - t2 ).count();
+		// cout << "BNN_time :" << BNN_time << " microseconds, " << 1000000/(float)BNN_time << " FPS" << endl;
+		// auto total_time = chrono::duration_cast<chrono::microseconds>( t3 - t1 ).count();
+		// cout << "total_time :" << total_time << " microseconds, " << 1000000/(float)total_time << " FPS" << endl;
 
 		putText(curFrame, classes[output], Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));		
-		putText(curFrame, classes[adjustedOutput], Point(15, 75), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));		
-		putText(curFrame, to_string(max_result), Point(15, 95), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));				
+		putText(curFrame, classes[adjusted_output], Point(15, 75), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));		
+		//putText(curFrame, to_string(max_result), Point(15, 95), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));				
 		putText(curFrame, windowMode, Point(15, 115), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));				
 		if (smallWindow != 0)
 		{			
 			rectangle(curFrame, Point((FRAME_WIDTH/2)-(WINDOW_WIDTH/2), (FRAME_HEIGHT/2)-(WINDOW_HEIGHT/2)), Point((FRAME_WIDTH/2)+(WINDOW_WIDTH/2), (FRAME_HEIGHT/2)+(WINDOW_HEIGHT/2)), Scalar(0, 0, 255)); // draw a 32x32 box at the centre
 		}
-        myfile << frameNum << "," << capPreprocess_time << "," << BNN_time << "," << total_time << "," << classes[output] <<"\n";
+        //myfile << frameNum << "," << capPreprocess_time << "," << BNN_time << "," << total_time << "," << classes[output] <<"\n";
 
 		imshow("Original", curFrame);
 		char ESC = waitKey(1);
