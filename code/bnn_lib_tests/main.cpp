@@ -301,14 +301,48 @@ void helpMessage(int argc, char** argv)
 	@para arg_weights
 	@return output
 */
-int output_filter(int arg_count, std::vector<std::vector<float>> arg_results_history, std::vector<float> arg_weights){  	
+int output_filter(int arg_count, int arg_past_output, std::vector<std::vector<float>> arg_results_history, std::vector<float> arg_weights){  	
 
-	cout << "output filer starts here" << endl;
+	cout << "output filer starts here ..." << endl;
+
+	if (arg_results_history.size() <= g_win_step){
+		//not enough data for previous analysis, return real time data
+		cout << "outputing real time data" << endl;
+		std::cout << "arg_count: " << arg_count << std::endl;
+		std::cout << "arg_results_history" << std::endl;
+		for (int i = 0; i < arg_results_history.size(); i++)
+		{
+			print_vector(arg_results_history[i]);
+		}
+
+		//std::vector<float> current_result = arg_results_history[arg_count];
+		int result_index = distance(arg_results_history[0].begin(), max_element(arg_results_history[0].begin(), arg_results_history[0].end()));
+		//float result_value = 0.00f;
+		//result_value = std::max_element(current_result.begin(), current_result.end());
+		std::cout << "real time data results index: " << result_index << std::endl;
+		print_vector(arg_results_history[0]);
+		return result_index;
+	}
+
 	if (arg_count < g_win_step){
-		std::vector<float> past_result = arg_results_history.rbegin()[arg_count];
-		return distance(past_result.begin(), max_element(past_result.begin(), past_result.end()));
-	}else if ( arg_count = g_win_step){
 
+		//DEBUG
+		// cout << "outputing last analysised result" << endl;
+		// std::cout << "arg_count + 1: " << arg_count + 1<< std::endl;
+		// std::cout << "arg_results_history" << std::endl;
+		// for (int i = 0; i < arg_results_history.size(); i++)
+		// {
+		// 	print_vector(arg_results_history[i]);
+		// }
+
+		// std::vector<float> past_result = arg_results_history[arg_count+1];
+		// int result_index2 = distance(past_result.begin(), max_element(past_result.begin(), past_result.end()));
+		// std::cout << "past analysised results index: " << result_index2 << std::endl;
+		// print_vector(past_result);
+		return arg_past_output;
+	}else if ( arg_count == g_win_step){
+
+		cout << "outputing current analysised result" << endl;
 		std::vector<float> adjusted_results(10, 0);
 		for(int i = 0; i < arg_results_history.size(); i++)
 		{ 
@@ -619,7 +653,7 @@ int calssifyCameraFrames2()
 	std::vector<uint8_t> bgr;
 	vector<float> certainty;
 	cv::Mat reducedSizedFrame(32, 32, CV_8UC3);
-	unsigned int window_step_count = 0;
+
 
 	// # of ExtMemWords per input
 	const unsigned int psi = 384; //paddedSize(imgs.size()*inWidth, bitsPerExtMemWord) / bitsPerExtMemWord;
@@ -639,6 +673,7 @@ int calssifyCameraFrames2()
 	weights.resize(g_win_length);
 	std::vector<std::vector<float> > results_history; // All its previous classifications
 	int step_counts = 0;
+	int past_output = 0;
 	float lambda = 0.2;
 	// Pre-populate history weights with exponential decays
 	for(int i = 0; i < g_win_length; i++)
@@ -657,13 +692,12 @@ int calssifyCameraFrames2()
 	{
 		windowMode = "Sub Window";		
 	}
-	myfile << "\nframeNum, capPreprocess_time, BNN_time, total_time, classes[output]\n";
+	myfile << "\nFrame No., Camera Time(us), Post Processing Time(us), Total Time(us), Output , Adjusted Output, , Camera Frame Rate, Classification Rate \n";
 	
 	while(true)
 	{
 		cout << "\nStart while loop (HW and SW multithreading and piplined):" << endl;
-		auto t1 = chrono::high_resolution_clock::now();	
-		// Capture the first frame to input to second processor
+		auto t1 = chrono::high_resolution_clock::now(); //time statistics
 		if (frameNum == 0)
 		{
 			cap >> curFrame;
@@ -708,15 +742,10 @@ int calssifyCameraFrames2()
 			}			
 		}
 
-		frameNum++;			
-		auto t2 = chrono::high_resolution_clock::now();			
-		auto capPreprocess_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-		/*
-		while(capPreprocess_time < 8000)
-		{
-			t2 = chrono::high_resolution_clock::now();
-			capPreprocess_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-		}*/		
+		frameNum++;
+
+		auto t2 = chrono::high_resolution_clock::now();	//time statistics		
+		auto camera_processing_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count(); //time statistics	
 		
 		// Call the hardware function
 		kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,1,0);
@@ -736,7 +765,7 @@ int calssifyCameraFrames2()
 
 
 		// Data Post Processing
-		//update result_history
+		// update result_history
 		results_history.insert(results_history.begin(), calculate_certainty(class_result));
 		if (results_history.size() > g_win_length)
 		{
@@ -744,13 +773,18 @@ int calssifyCameraFrames2()
 		}
 
 		int adjusted_output = 0;
-		adjusted_output = output_filter(step_counts, results_history, weights);
+		adjusted_output = output_filter(step_counts, past_output, results_history, weights);
 
-		// if (step_counts < g_win_step) {
-		// 	step_counts++;
-		// } else {
-		// 	step_counts = 0;
-		// }
+		if (step_counts < g_win_step) {
+			step_counts++;
+		} else {
+			step_counts = 0;
+			past_output = adjusted_output;
+		}
+
+		auto t3 = chrono::high_resolution_clock::now();
+		auto post_processing_time = chrono::duration_cast<chrono::microseconds>( t3 - t2 ).count();
+		auto total_time = chrono::duration_cast<chrono::microseconds>( t3 - t1 ).count();
 	  	
 		cout << "Output = " << classes[output] << endl;	
 		cout << "Adjusted Output = " << classes[adjusted_output] << endl;	
@@ -760,7 +794,11 @@ int calssifyCameraFrames2()
 		if ( expected_class_num == adjusted_output)
 			ok_adjusted++;
 
-		std::cout << "frame number is: " << frameNum << std::endl;		
+		std::cout << "Frame number is: " << frameNum << std::endl;	
+		std::cout << "Camera processing time(us) is: " << (float)camera_processing_time << std::endl;
+		std::cout << "Data post processing time(us) is: " << (float)post_processing_time << std::endl;
+		std::cout << "Total time(us) is: " << (float)total_time << std::endl;
+		
 		// //auto capPreprocess_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
 		// cout << "capPreprocess_time :" << capPreprocess_time << " microseconds, " << 1000000/(float)capPreprocess_time << " FPS" << endl;
 		// //auto BNN_time = chrono::duration_cast<chrono::microseconds>( t3 - t2 ).count();
@@ -776,7 +814,7 @@ int calssifyCameraFrames2()
 		{			
 			rectangle(curFrame, Point((FRAME_WIDTH/2)-(WINDOW_WIDTH/2), (FRAME_HEIGHT/2)-(WINDOW_HEIGHT/2)), Point((FRAME_WIDTH/2)+(WINDOW_WIDTH/2), (FRAME_HEIGHT/2)+(WINDOW_HEIGHT/2)), Scalar(0, 0, 255)); // draw a 32x32 box at the centre
 		}
-        //myfile << frameNum << "," << capPreprocess_time << "," << BNN_time << "," << total_time << "," << classes[output] <<"\n";
+        myfile << frameNum << "," << camera_processing_time << "," << post_processing_time << "," << total_time << "," << classes[output] << "," << classes[adjusted_output]<< "," << "" << "," << 1/(camera_processing_time/1000000) << "," << 1/(total_time/1000000) <<"\n";
 
 		imshow("Original", curFrame);
 		char ESC = waitKey(1);
@@ -791,12 +829,12 @@ int calssifyCameraFrames2()
             break;
         }		
 	}
-	float Accuracy = 100.0*((float)ok/(float)frameNum);
-	float Accuracy_adj = 100.0*((float)ok_adjusted/(float)frameNum);
-	myfile << "\n Accuracy," << Accuracy << "," << classes[expected_class_num];
-	myfile << "\n Adjusted Accuracy," << Accuracy_adj << "," << classes[expected_class_num];
-	myfile << "\n Number of frames classified," << frameNum;
-	myfile << "\n Frame Size," << windowMode << "," << WINDOW_WIDTH <<"x"<<WINDOW_WIDTH;
+	//float Accuracy = 100.0*((float)ok/(float)frameNum);
+	//float Accuracy_adj = 100.0*((float)ok_adjusted/(float)frameNum);
+	//myfile << "\n Accuracy," << Accuracy << "," << classes[expected_class_num];
+	//myfile << "\n Adjusted Accuracy," << Accuracy_adj << "," << classes[expected_class_num];
+	//myfile << "\n Number of frames classified," << frameNum;
+	//myfile << "\n Frame Size," << windowMode << "," << WINDOW_WIDTH <<"x"<<WINDOW_WIDTH;
 	
 	cap.release();
 	myfile.close();	
