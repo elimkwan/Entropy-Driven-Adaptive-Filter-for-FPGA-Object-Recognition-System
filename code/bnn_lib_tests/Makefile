@@ -48,6 +48,8 @@ BNN: $(SOURCE) foldedmv-offload.o rawhls-offload.o
 	$(CXX) -o $@ $< foldedmv-offload.o rawhls-offload.o $(LIBS) $(XI_CFLAGS) $(XI_LDFLAGS)  $(LDFLAGS)
 	
 
-clean:
+clean-all:
 	rm -f  $(XI_PROGs) foldedmv-offload.o rawhls-offload.o
 
+clean:
+	rm -f  $(XI_PROGs)

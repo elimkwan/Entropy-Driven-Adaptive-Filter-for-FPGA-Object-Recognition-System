@@ -50,6 +50,7 @@
 #include "opencv2/opencv.hpp"
 #include <unistd.h>  		//for sleep
 #include <omp.h>  		//for sleep
+//#include <opencv2/core/utility.hpp>
 
 
 using namespace std;
@@ -57,25 +58,19 @@ using namespace tiny_cnn;
 using namespace tiny_cnn::activation;
 using namespace cv;
 
-#define FRAME_WIDTH 320		//176	//320	//640
-#define FRAME_HEIGHT 240		//144	//240	//480
+#define frame_width 320		//176	//320	//640
+#define frame_height 240		//144	//240	//480
 
-unsigned int WINDOW_WIDTH;
-unsigned int WINDOW_HEIGHT;
-unsigned int g_win_step;
-unsigned int g_win_length;
 float lambda;
+unsigned int ok, failed; // used in FoldedMV.cpp
 
 const std::string USER_DIR = "/home/xilinx/jose_bnn/bnn_lib_tests/";
 const std::string BNN_PARAMS = USER_DIR + "params/cifar10/";
-unsigned int ok, failed, ok_adjusted;
-int expected_class_num;
-int runFrames, smallWindow;
 
 ofstream myfile;
 
-int calssifyCameraFrames1();
-int calssifyCameraFrames2();
+int classify_frames_cam_sw(int frames, int win_height, int win_width, int win_step, int win_length, int argv7);
+int classify_frames_load(int win_height, int win_width);
 
 
 template<typename T>
@@ -284,6 +279,7 @@ FoldedMVDeinit();
 
 void helpMessage(int argc, char** argv)
 {
+	//TODO: to be updated
 	cout << argv[1] << " <mode> " << endl;
 	cout << "mode = hw, sw" << endl;
 	cout << "hw: Sowftware parts run in parallel with hw part (async/wait)" << endl;
@@ -296,16 +292,17 @@ void helpMessage(int argc, char** argv)
 /*
 	Smoothening out output
 
-	@para arg_count:
+	@para arg_win_step:
+	@para arg_count;
 	@para arg_results_history:
 	@para arg_weights
 	@return output
 */
-int output_filter(int arg_count, int arg_past_output, std::vector<std::vector<float>> arg_results_history, std::vector<float> arg_weights){  	
+int output_filter(int arg_win_step, int arg_count, int arg_past_output, std::vector<std::vector<float>> arg_results_history, std::vector<float> arg_weights){  	
 
 	cout << "output filer starts here ..." << endl;
 
-	if (arg_results_history.size() <= g_win_step){
+	if (arg_results_history.size() <= arg_win_step){
 		//not enough data for previous analysis, return real time data
 		cout << "outputing real time data" << endl;
 		std::cout << "arg_count: " << arg_count << std::endl;
@@ -324,23 +321,10 @@ int output_filter(int arg_count, int arg_past_output, std::vector<std::vector<fl
 		return result_index;
 	}
 
-	if (arg_count < g_win_step){
-
-		//DEBUG
-		// cout << "outputing last analysised result" << endl;
-		// std::cout << "arg_count + 1: " << arg_count + 1<< std::endl;
-		// std::cout << "arg_results_history" << std::endl;
-		// for (int i = 0; i < arg_results_history.size(); i++)
-		// {
-		// 	print_vector(arg_results_history[i]);
-		// }
-
-		// std::vector<float> past_result = arg_results_history[arg_count+1];
-		// int result_index2 = distance(past_result.begin(), max_element(past_result.begin(), past_result.end()));
-		// std::cout << "past analysised results index: " << result_index2 << std::endl;
-		// print_vector(past_result);
+	if (arg_count < arg_win_step){
 		return arg_past_output;
-	}else if ( arg_count == g_win_step){
+
+	}else if ( arg_count == arg_win_step){
 
 		cout << "outputing current analysised result" << endl;
 		std::vector<float> adjusted_results(10, 0);
@@ -358,69 +342,84 @@ int output_filter(int arg_count, int arg_past_output, std::vector<std::vector<fl
 
 }
 
+
+/*
+	Command avaliable:
+	./BNN load 128 //operation, display window size
+	./BNN cam_sw 128 1000 5 12 1 //operation, display window size, number of frames to be run, window step, window length, expected class
+
+*/
 int main(int argc, char** argv)
 {
 	for(int i = 0; i < argc; i++)
 		cout << "argv[" << i << "]" << " = " << argv[i] << endl;	
 	
-	if(argc == 4)
-	{
-		if (strcmp(argv[1], "hw") == 0)
-		{
-			expected_class_num = atoi(argv[2]);
-			runFrames = atoi(argv[3]);
-			calssifyCameraFrames1();
-		}
-		else
-		{
-			helpMessage(argc, argv);
-			return -1;
-		}
-	}
-	
-	else if(argc == 7)
-	{
-		//	./BNN sw 1 1000 128 5 12
-		if (strcmp(argv[1], "sw") == 0)
-		{
-			expected_class_num = atoi(argv[2]);
-			runFrames = atoi(argv[3]);
-			WINDOW_HEIGHT = atoi(argv[4]);
-			WINDOW_WIDTH = atoi(argv[4]);
-			g_win_step = atoi(argv[5]);//5
-			g_win_length = atoi(argv[6]);//12
-			if (WINDOW_HEIGHT == 0)
-				smallWindow = 0; 
-			else 
-				smallWindow = 1; 
-			calssifyCameraFrames2();
-		}
-		else
-		{
-			helpMessage(argc, argv);
-			return -1;
-		}
+	if (argc >= 3){
+		std::string operation = argv[1];
+		int win_height = atoi(argv[2]);
+		int win_width = atoi(argv[2]);
 		
+		if (argc >= 6)
+		{
+			//cam_sw, cam_hw
+			int frames = atoi(argv[3]);
+			int win_step =  atoi(argv[4]);
+			int win_length = atoi(argv[5]);
+
+			if (operation == "cam_sw")
+			{
+				int expected_class_num = 1;
+				expected_class_num = atoi(argv[6]);
+				classify_frames_cam_sw(frames, win_height, win_width, win_step, win_length, expected_class_num);
+				return 1;
+			}
+			
+			cout << "argc = " << argc << endl;
+			helpMessage(argc, argv);
+			return -1;
+			
+		}
+		else if (argc >= 3)
+		{
+			//load, load-roi,test
+			if (operation == "load")
+			{
+				classify_frames_load(win_height, win_width);
+				return 1;
+			}
+			
+			cout << "argc = " << argc << endl;
+			helpMessage(argc, argv);
+			return -1;
+		}
 	}
-	else
-	{
-		cout << "argc = " << argc << endl;
-		helpMessage(argc, argv);
-		return -1;
-	}
-	
+
+	cout << "argc = " << argc << endl;
+	helpMessage(argc, argv);
+	return -1;	
 }
 
+/*
+	load all the jpg images in ./test_images for testing
 
-// This function has BNN and the software function piplined
-int calssifyCameraFrames1()
+*/
+int classify_frames_load(int win_height, int win_width)
 {
-	myfile.open ("result_HW.csv",std::ios_base::app);
+	//initialize variables
+	cv::Mat reduced_sized_frame(32, 32, CV_8UC3);
+	cv::Mat cur_frame;
+	Mat bnn_input = Mat(win_width, win_height, CV_8UC3);
+	float_t scale_min = -1.0;
+    float_t scale_max = 1.0;
+	unsigned int frame_num = 0;	
+	int number_class = 10;
+	int output = 0;
+	
+
+
+	myfile.open ("result_load.csv",std::ios_base::app);
 	printf("Hello BNN\n");
 
-	//cout << "  Number of processors available = " << omp_get_num_procs ( ) << "\n";
-	//cout << "  Number of threads =              " << omp_get_max_threads ( ) << "\n";
-	
 	deinit();
 	load_parameters(BNN_PARAMS.c_str()); 
 	printf("Done loading BNN\n");
@@ -452,28 +451,20 @@ int calssifyCameraFrames1()
 		cout << "Failed to open classes.txt" << endl;
 	}
 
-	// Open defult camera
-	VideoCapture cap(0);
-    if(!cap.open(0))
-    {
-       cout << "cannot open camera" << endl;
-       return 0;
-    }
+	//Loading png images in test_images files
+	vector<cv::String> fn;
+	glob("test_images/*.jpg", fn, false);
 
-	cap.set(CV_CAP_PROP_FRAME_WIDTH,FRAME_WIDTH);
-	cap.set(CV_CAP_PROP_FRAME_HEIGHT,FRAME_HEIGHT);
-	
-	std::cout << "\nCamera resolution = " << cap.get(CV_CAP_PROP_FRAME_WIDTH) << "x" << cap.get(CV_CAP_PROP_FRAME_HEIGHT) << std::endl;
-
-	int number_class = 10;
-	int certainty_spread = 10;
-	int	output = 0;
-	unsigned int frameNum = 0;	
-	const unsigned int count = 1;
-    float_t scale_min = -1.0;
-    float_t scale_max = 1.0;
-	std::vector<uint8_t> bgr;
-	cv::Mat reducedSizedFrame(32, 32, CV_8UC3);
+	vector<Mat> images;
+	size_t count = fn.size(); 
+	for (size_t i=0; i<count; i++)
+	{
+		cout<<"loading images "<< i <<endl;
+		images.push_back(imread(fn[i]));
+		//std::string window_name = "Display" + std::to_string(i); //to display the image
+		//imshow(window_name, images[i]);
+		//waitKey(0);
+	}
 
 	// # of ExtMemWords per input
 	const unsigned int psi = 384; //paddedSize(imgs.size()*inWidth, bitsPerExtMemWord) / bitsPerExtMemWord;
@@ -489,171 +480,107 @@ int calssifyCameraFrames1()
 	//ExtMemWord * packedOut = new ExtMemWord[(count * pso)];
 	ExtMemWord * packedOut = (ExtMemWord *)sds_alloc((count * pso)*sizeof(ExtMemWord));
 
-	myfile << "\nframeNum, cap_time, process_time, BNN_time, total_time, classes[output]\n";
-	
-	while(true)
-	{	
-		cout << "\nStart while loop (HW and SW piplined):" << endl;
-		auto t1 = chrono::high_resolution_clock::now();	
-		clock_t beginFrame = clock();
 
-		Mat curFrame;
-		cap >> curFrame;
-        if( curFrame.empty() ) break; // end of video stream
-		frameNum++;	
-		auto t2 = chrono::high_resolution_clock::now();		
-		// Pre-process frames
-		cv::resize(curFrame, reducedSizedFrame, cv::Size(32, 32), 0, 0, cv::INTER_LINEAR );	
-		flatten_mat(reducedSizedFrame, bgr);
-		// Scale image pixel values to float between -1 and 1
-		vec_t img;
-		std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),
-			[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-		// Convert float to binary format by quantizing and suing SDSoC data format
-		quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-		auto t3 = chrono::high_resolution_clock::now();	
-		auto capPreprocess_time = chrono::duration_cast<chrono::microseconds>( t3 - t1 ).count();
-/*
-		while(capPreprocess_time < 8000) // fix program to 125 FPS
+	for (size_t i=0; i<count; i++){
+		cur_frame = images[i];
+		int img_height = cur_frame.size().height;
+		int img_width = cur_frame.size().width;
+		//Mat bnn_input = Mat(cv::Size(win_width, win_height));
+		std::vector<uint8_t> bgr;
+
+		if(win_height == 0)
 		{
-			t3 = chrono::high_resolution_clock::now();
-			capPreprocess_time = chrono::duration_cast<chrono::microseconds>( t3 - t1 ).count();
-		}*/
-		
-		/*
-		if (frameNum != 1)
-		{
-		kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,0,1);	
-		}*/
+			cv::resize(cur_frame, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );	
+			flatten_mat(reduced_sized_frame, bgr);			
+			vec_t img;
+			std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+			quantiseAndPack<8, 1>(img, &packedImages[0], psi);										
+		} else {	
+			// Take only part of the frame from the original frame (center)
+			Rect R(Point((img_width/2)-(win_width/2), (img_height/2)-(win_height/2)), Point((img_width/2)+(win_width/2), (img_height/2)+(win_height/2)));
+
+			cv::resize(cur_frame(R), bnn_input, cv::Size(win_width, win_height), 0, 0, cv::INTER_CUBIC );
+			cv::resize(bnn_input, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );			
+			flatten_mat(reduced_sized_frame, bgr);
+			vec_t img;
+			std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+			quantiseAndPack<8, 1>(img, &packedImages[0], psi);															
+		}
+
 		// Call the hardware function
 		kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,1,0);
-		if (frameNum != 1)
+		if (frame_num != 1)
 		{
-			kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,0,1);	
-		}		
+			kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,0,1);
+		}
 		// Extract the output of BNN and classify result
 		std::vector<unsigned int> class_result;
-	    tiny_cnn::vec_t outTest(number_class, 0);
+		tiny_cnn::vec_t outTest(number_class, 0);
 		copyFromLowPrecBuffer<unsigned short>(&packedOut[0], outTest);
 		for(unsigned int j = 0; j < number_class; j++) {			
 			class_result.push_back(outTest[j]);
+		}		
+		output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
+
+		cout<< "classification result: " << classes[output] << endl;
+
+
+		std::string expected_class = fn[i];
+		expected_class.erase(0,12);
+		std:string img_name = expected_class;
+		expected_class.erase(expected_class.find_last_of('.'));
+		expected_class.erase(std::remove_if(std::begin(expected_class), std::end(expected_class),[](char ch) { return std::isdigit(ch); }), expected_class.end());
+
+		if (expected_class == classes[output])
+		{
+			cout<<"correctly identified "<< expected_class <<endl;
+		} else{
+			cout<<"cannot identify it is a " << expected_class <<endl;
 		}
-		//float certainty = calculate_certainty(class_result, certainty_spread);	
-		output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));	
-		auto t4 = chrono::high_resolution_clock::now();		
 
-		auto total_time = chrono::duration_cast<chrono::microseconds>( t4 - t1 ).count();
+		putText(cur_frame, classes[output], Point((img_width/2)-(win_width/2) + 10, (img_height/2)-(win_height/2)+10), FONT_HERSHEY_PLAIN, 1 , Scalar(0, 255, 0));
+		rectangle(cur_frame, Point((img_width/2)-(win_width/2), (img_height/2)-(win_height/2)), Point((img_width/2)+(win_width/2), (img_height/2)+(win_height/2)), Scalar(0, 0, 255)); // draw a 32x32 box at the centre
+		imshow(img_name, cur_frame);
+		//imshow("reduced", reduced_sized_frame);
+		//imshow("bnn_input",bnn_input);
 
-		
-		cout << "Output = " << classes[output] << endl;	
-		if ( expected_class_num == output)
-			ok++;
-		//cout << "certainty = " << certainty << endl;
 
-		std::cout << "frame number is: " << frameNum << std::endl;		
-		auto cap_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-		cout << "cap_time :" << cap_time << " microseconds, " << 1000000/(float)cap_time << " FPS" << endl;
-		auto process_time = chrono::duration_cast<chrono::microseconds>( t3 - t2 ).count();
-		cout << "process_time :" << process_time << " microseconds, " << 1000000/(float)process_time << " FPS" << endl;
-		auto BNN_time = chrono::duration_cast<chrono::microseconds>( t4 - t3 ).count();
-		cout << "BNN_time :" << BNN_time << " microseconds, " << 1000000/(float)BNN_time << " FPS" << endl;
-		//auto total_time = chrono::duration_cast<chrono::microseconds>( t4 - t1 ).count();
-		cout << "total_time :" << total_time << " microseconds, " << 1000000/(float)total_time << " FPS" << endl;
+		vector<int> compression_params;
+		compression_params.push_back( CV_IMWRITE_JPEG_QUALITY );
+		compression_params.push_back( 100 );
+		std::string img_path = "./test_results/" + img_name;
+		imwrite(img_path,cur_frame, compression_params);
+		//imwrite("./test_results/extracted.jpg",bnn_input, compression_params);
+		//imwrite("./test_results/reduced.jpg",reduced_sized_frame, compression_params);
 
-        myfile << frameNum << "," << cap_time << "," << process_time << "," << BNN_time << "," << total_time << "," << classes[output] <<"\n";
+		waitKey(0);
 
-		putText(curFrame, classes[output], Point(55, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));		
-		//putText(curFrame, to_string(certainty), Point(55, 75), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));				
-		imshow("Original", curFrame);
-		char ESC = waitKey(1);
-		
-		if (frameNum > runFrames) 
-        {
-            cout << "Number of frames done: " << frameNum << endl;
-            break;
-        }		
-		if (ESC == 27) 
-        {
-            cout << "ESC key is pressed by user" << endl;
-            break;
-        }		
 	}
-	float Accuracy = 100.0*((float)ok/(float)frameNum);
-	myfile << "\n Accuracy," << Accuracy << "," << classes[expected_class_num];
-	myfile << "\n Number of program frames classified," << frameNum;
-	
-	cap.release();
-	myfile.close();	
+
 	sds_free(packedImages);
 	sds_free(packedOut);
+	return 0;
+
+
 }
 
-
-
 // This function has BNN, software functions: capturing + pre-processing functions all piplined
-int calssifyCameraFrames2()
+int classify_frames_cam_sw (int frames, int win_height, int win_width, int win_step, int win_length, int argv7)
 {
-	myfile.open ("result_SW.csv",std::ios_base::app);
-	printf("Hello BNN\n");
 
-	cout << "  Number of processors available = " << omp_get_num_procs ( ) << "\n";
-	cout << "  Number of threads =              " << omp_get_max_threads ( ) << "\n";
-	
-	deinit();
-	load_parameters(BNN_PARAMS.c_str()); 
-	printf("Done loading BNN\n");
-	
-	// Initialize the network 
-	FoldedMVInit("cnv-pynq");
-	network<mse, adagrad> nn;
-	makeNetwork(nn);
-
-	// Get a list of all the output classes
-	vector<string> classes;
-	ifstream file((USER_DIR + "params/cifar10/classes.txt").c_str());
-	cout << "Opening parameters at: " << (USER_DIR + "params/cifar10/classes.txt") << endl;
-	string str;
-	if (file.is_open())
-	{
-		cout << "Classes: [";
-		while (getline(file, str))
-		{
-			cout << str << ", "; 
-			classes.push_back(str);
-		}
-		cout << "]" << endl;
-		
-		file.close();
-	}
-	else
-	{
-		cout << "Failed to open classes.txt" << endl;
-	}
-
-	// Open defult camera
-	VideoCapture cap(0 + CV_CAP_V4L2);
-    if(!cap.open(0))
-    {
-       cout << "cannot open camera" << endl;
-       return 0;
-    }
-
-	cap.set(CV_CAP_PROP_FRAME_WIDTH,FRAME_WIDTH);
-	cap.set(CV_CAP_PROP_FRAME_HEIGHT,FRAME_HEIGHT);
-	
-	std::cout << "\nCamera resolution = " << cap.get(CV_CAP_PROP_FRAME_WIDTH) << "x" << cap.get(CV_CAP_PROP_FRAME_HEIGHT) << std::endl;
-
+	//variable initialization
 	int number_class = 10;
 	int certainty_spread = 10;
 	int	output = 0;
-	unsigned int frameNum = 0;	
+	unsigned int frame_num = 0;	
 	const unsigned int count = 1;
     float_t scale_min = -1.0;
     float_t scale_max = 1.0;
 	std::vector<uint8_t> bgr;
 	vector<float> certainty;
-	cv::Mat reducedSizedFrame(32, 32, CV_8UC3);
-
+	cv::Mat reduced_sized_frame(32, 32, CV_8UC3);
+	int expected_class_num = argv7;
+	unsigned int identified = 0 , identified_adj = 0;
 
 	// # of ExtMemWords per input
 	const unsigned int psi = 384; //paddedSize(imgs.size()*inWidth, bitsPerExtMemWord) / bitsPerExtMemWord;
@@ -670,90 +597,142 @@ int calssifyCameraFrames2()
 	ExtMemWord * packedOut = (ExtMemWord *)sds_alloc((count * pso)*sizeof(ExtMemWord));
 
 	std::vector<float> weights;
-	weights.resize(g_win_length);
+	weights.resize(win_length);
 	std::vector<std::vector<float> > results_history; // All its previous classifications
 	int step_counts = 0;
 	int past_output = 0;
 	float lambda = 0.2;
 	// Pre-populate history weights with exponential decays
-	for(int i = 0; i < g_win_length; i++)
+	for(int i = 0; i < win_length; i++)
 	{
 		weights[i] = expDecay(lambda, i);
 	}
 
+	Mat cur_frame, cap_frame;
+	std::string window_mode;
 
-	Mat curFrame, capFrame;
-	string windowMode;
-	if(smallWindow == 0)
+
+	myfile.open ("result_SW.csv",std::ios_base::app);
+	printf("Hello BNN\n");
+
+	cout << "  Number of processors available = " << omp_get_num_procs ( ) << "\n";
+	cout << "  Number of threads =              " << omp_get_max_threads ( ) << "\n";
+	
+	deinit();
+	load_parameters(BNN_PARAMS.c_str()); 
+	printf("Done loading BNN\n");
+	
+	// Initialize the network 
+	FoldedMVInit("cnv-pynq");
+	network<mse, adagrad> nn;
+	makeNetwork(nn);
+
+	// Get a list of all the output classes
+	vector<std::string> classes;
+	ifstream file((USER_DIR + "params/cifar10/classes.txt").c_str());
+	cout << "Opening parameters at: " << (USER_DIR + "params/cifar10/classes.txt") << endl;
+	string str;
+	if (file.is_open())
 	{
-		windowMode = "Full window";
+		cout << "Classes: [";
+		while (getline(file, str))
+		{
+			cout << str << ", "; 
+			classes.push_back(str);
+		}
+		cout << "]" << endl;
+		
+		file.close();
+	}
+	else
+	{
+		cout << "Failed to open classes.txt" << endl;
+	}
+
+
+
+	// Open defult camera
+	VideoCapture cap(0 + CV_CAP_V4L2);
+	if(!cap.open(0))
+	{
+	cout << "cannot open camera" << endl;
+	return 0;
+	}
+
+	cap.set(CV_CAP_PROP_FRAME_WIDTH,frame_width);
+	cap.set(CV_CAP_PROP_FRAME_HEIGHT,frame_height);
+	std::cout << "\nCamera resolution = " << cap.get(CV_CAP_PROP_FRAME_WIDTH) << "x" << cap.get(CV_CAP_PROP_FRAME_HEIGHT) << std::endl;
+	
+	
+	
+
+	if(win_height == 0)
+	{
+		window_mode = "Full window";
 	}
 	else 
 	{
-		windowMode = "Sub Window";		
+		window_mode = "Sub Window";		
 	}
+
 	myfile << "\nFrame No., Camera Time(us), Post Processing Time(us), Total Time(us), Output , Adjusted Output, , Camera Frame Rate, Classification Rate \n";
 	
 	while(true)
 	{
 		cout << "\nStart while loop (HW and SW multithreading and piplined):" << endl;
 		auto t1 = chrono::high_resolution_clock::now(); //time statistics
-		if (frameNum == 0)
+
+		if (frame_num == 0)
 		{
-			cap >> curFrame;
+			cap >> cur_frame;
 		}
 
 		#pragma omp parallel sections
 		{
 			#pragma omp section
 			{
-				cap >> capFrame;
-				curFrame = capFrame;
-				//if( curFrame.empty() ) break; // end of video stream
-				//cout << "capture frame P1" << endl;
+				cap >> cap_frame;
+				cur_frame = cap_frame;
 			}
 			
 			#pragma omp section
 			{
-				if(smallWindow == 0)
+				if(win_height == 0)
 				{
-					cv::resize(curFrame, reducedSizedFrame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );	
-					flatten_mat(reducedSizedFrame, bgr);			
+					cv::resize(cur_frame, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );	
+					flatten_mat(reduced_sized_frame, bgr);			
 					vec_t img;
 					std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),
 						[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-					quantiseAndPack<8, 1>(img, &packedImages[0], psi);		
-					//cout << "full frame" << endl;									
+					quantiseAndPack<8, 1>(img, &packedImages[0], psi);										
 				}
 				else
 				{	// Take only 128*128 frame size from the original frame
-					Rect R(Point((FRAME_WIDTH/2)-(WINDOW_WIDTH/2), (FRAME_HEIGHT/2)-(WINDOW_HEIGHT/2)), Point((FRAME_WIDTH/2)+(WINDOW_WIDTH/2), (FRAME_HEIGHT/2)+(WINDOW_HEIGHT/2)));
-					Mat bnnInput;
-					bnnInput = curFrame(R); //Extract ROI
+					Rect R(Point((frame_width/2)-(win_width/2), (frame_height/2)-(win_height/2)), Point((frame_width/2)+(win_width/2), (frame_height/2)+(win_height/2)));
+					Mat bnn_input;
+					bnn_input = cur_frame(R); //Extract center frame as ROI
 				
-					cv::resize(bnnInput, reducedSizedFrame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );	
-					flatten_mat(reducedSizedFrame, bgr);			
+					cv::resize(bnn_input, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );	
+					flatten_mat(reduced_sized_frame, bgr);			
 					vec_t img;
 					std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),
 						[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-					quantiseAndPack<8, 1>(img, &packedImages[0], psi);							
-					//cout << "reduced frame" << endl;									
+					quantiseAndPack<8, 1>(img, &packedImages[0], psi);															
 				}
 			}			
 		}
 
-		frameNum++;
+		frame_num++;
 
 		auto t2 = chrono::high_resolution_clock::now();	//time statistics		
 		auto camera_processing_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count(); //time statistics	
 		
 		// Call the hardware function
 		kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,1,0);
-		if (frameNum != 1)
+		if (frame_num != 1)
 		{
 			kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,0,1);
 		}
-		//usleep(500);
 		// Extract the output of BNN and classify result
 		std::vector<unsigned int> class_result;
 		tiny_cnn::vec_t outTest(number_class, 0);
@@ -767,15 +746,15 @@ int calssifyCameraFrames2()
 		// Data Post Processing
 		// update result_history
 		results_history.insert(results_history.begin(), calculate_certainty(class_result));
-		if (results_history.size() > g_win_length)
+		if (results_history.size() > win_length)
 		{
 			results_history.pop_back();
 		}
 
 		int adjusted_output = 0;
-		adjusted_output = output_filter(step_counts, past_output, results_history, weights);
+		adjusted_output = output_filter(win_step, step_counts, past_output, results_history, weights);
 
-		if (step_counts < g_win_step) {
+		if (step_counts < win_step) {
 			step_counts++;
 		} else {
 			step_counts = 0;
@@ -789,38 +768,35 @@ int calssifyCameraFrames2()
 		cout << "Output = " << classes[output] << endl;	
 		cout << "Adjusted Output = " << classes[adjusted_output] << endl;	
 		
-		if ( expected_class_num == output)
-			ok++;
-		if ( expected_class_num == adjusted_output)
-			ok_adjusted++;
+		if (expected_class_num == output){
+			identified ++;
+		}
+		if (expected_class_num == adjusted_output){
+			identified_adj++;
+		}
 
-		std::cout << "Frame number is: " << frameNum << std::endl;	
+		std::cout << "Frame number is: " << frame_num << std::endl;	
 		std::cout << "Camera processing time(us) is: " << (float)camera_processing_time << std::endl;
 		std::cout << "Data post processing time(us) is: " << (float)post_processing_time << std::endl;
 		std::cout << "Total time(us) is: " << (float)total_time << std::endl;
 		
-		// //auto capPreprocess_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-		// cout << "capPreprocess_time :" << capPreprocess_time << " microseconds, " << 1000000/(float)capPreprocess_time << " FPS" << endl;
-		// //auto BNN_time = chrono::duration_cast<chrono::microseconds>( t3 - t2 ).count();
-		// cout << "BNN_time :" << BNN_time << " microseconds, " << 1000000/(float)BNN_time << " FPS" << endl;
-		// auto total_time = chrono::duration_cast<chrono::microseconds>( t3 - t1 ).count();
-		// cout << "total_time :" << total_time << " microseconds, " << 1000000/(float)total_time << " FPS" << endl;
-
-		putText(curFrame, classes[output], Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));		
-		putText(curFrame, classes[adjusted_output], Point(15, 75), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));		
-		//putText(curFrame, to_string(max_result), Point(15, 95), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));				
-		putText(curFrame, windowMode, Point(15, 115), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));				
-		if (smallWindow != 0)
+		putText(cur_frame, classes[output], Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));		
+		putText(cur_frame, classes[adjusted_output], Point(15, 75), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));						
+		putText(cur_frame, window_mode, Point(15, 115), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));				
+		if (win_height != 0)
 		{			
-			rectangle(curFrame, Point((FRAME_WIDTH/2)-(WINDOW_WIDTH/2), (FRAME_HEIGHT/2)-(WINDOW_HEIGHT/2)), Point((FRAME_WIDTH/2)+(WINDOW_WIDTH/2), (FRAME_HEIGHT/2)+(WINDOW_HEIGHT/2)), Scalar(0, 0, 255)); // draw a 32x32 box at the centre
+			rectangle(cur_frame, Point((frame_width/2)-(win_width/2), (frame_height/2)-(win_height/2)), Point((frame_width/2)+(win_width/2), (frame_height/2)+(win_height/2)), Scalar(0, 0, 255)); // draw a 32x32 box at the centre
 		}
-        myfile << frameNum << "," << camera_processing_time << "," << post_processing_time << "," << total_time << "," << classes[output] << "," << classes[adjusted_output]<< "," << "" << "," << 1/(camera_processing_time/1000000) << "," << 1/(total_time/1000000) <<"\n";
 
-		imshow("Original", curFrame);
+		float camera_frame_rate = 1/((float)camera_processing_time/1000000);
+		float classification_rate = 1/((float)total_time/1000000);
+        myfile << frame_num << "," << camera_processing_time << "," << post_processing_time << "," << total_time << "," << classes[output] << "," << classes[adjusted_output]<< "," << "" << "," << camera_frame_rate << "," << classification_rate <<"\n";
+
+		imshow("Original", cur_frame);
 		char ESC = waitKey(1);
-		if (frameNum > runFrames) 
+		if (frame_num > frames) 
         {
-            cout << "Number of frames done: " << frameNum << endl;
+            cout << "Number of frames done: " << frame_num << endl;
             break;
         }		
 		if (ESC == 27) 
@@ -829,15 +805,19 @@ int calssifyCameraFrames2()
             break;
         }		
 	}
-	//float Accuracy = 100.0*((float)ok/(float)frameNum);
-	//float Accuracy_adj = 100.0*((float)ok_adjusted/(float)frameNum);
-	//myfile << "\n Accuracy," << Accuracy << "," << classes[expected_class_num];
-	//myfile << "\n Adjusted Accuracy," << Accuracy_adj << "," << classes[expected_class_num];
-	//myfile << "\n Number of frames classified," << frameNum;
-	//myfile << "\n Frame Size," << windowMode << "," << WINDOW_WIDTH <<"x"<<WINDOW_WIDTH;
+	
+	float accuracy = 100.0*((float)identified/(float)frame_num);
+	float accuracy_adj = 100.0*((float)identified_adj/(float)frame_num);
+	myfile << "\n Accuracy," << accuracy << "," << classes[expected_class_num];
+	myfile << "\n Adjusted Accuracy," << accuracy_adj << "," << classes[expected_class_num];
+	myfile << "\n Number of frames classified," << frame_num;
+	myfile << "\n Number of frames identified," << identified;
+	myfile << "\n Frame Size," << window_mode << "," << win_width <<"x"<< win_height;
 	
 	cap.release();
 	myfile.close();	
 	sds_free(packedImages);
 	sds_free(packedOut);
+	return 1;
 }
+
