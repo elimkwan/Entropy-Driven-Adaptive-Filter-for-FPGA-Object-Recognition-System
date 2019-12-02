@@ -69,8 +69,14 @@ const std::string BNN_PARAMS = USER_DIR + "params/cifar10/";
 
 ofstream myfile;
 
+//main functions
 int classify_frames_cam_sw(int frames, int win_height, int win_width, int win_step, int win_length, int argv7);
 int classify_frames_load(int win_height, int win_width);
+int classify_frames_load_roi_test(int win_height, int win_width, int roi_count);
+
+//helper and lambda function
+void helpMessage(int argc, char** argv);
+int output_filter(int arg_win_step, int arg_count, int arg_past_output, std::vector<std::vector<float>> arg_results_history, std::vector<float> arg_weights);
 
 
 template<typename T>
@@ -338,16 +344,14 @@ int output_filter(int arg_win_step, int arg_count, int arg_past_output, std::vec
 		return distance(adjusted_results.begin(), max_element(adjusted_results.begin(), adjusted_results.end()));
 	}
 
-
-
 }
 
 
 /*
 	Command avaliable:
-	./BNN load 128 //operation, display window size
 	./BNN cam_sw 128 1000 5 12 1 //operation, display window size, number of frames to be run, window step, window length, expected class
-
+	./BNN load 128 //operation, display window size
+	./BNN load_roi_test 300 150 //operations, window size, ROI step size in both x,y directions
 */
 int main(int argc, char** argv)
 {
@@ -387,6 +391,12 @@ int main(int argc, char** argv)
 				classify_frames_load(win_height, win_width);
 				return 1;
 			}
+			else if (operation == "load_roi_test" && argc >= 4)
+			{
+				int roi_steps = atoi(argv[3]);
+				classify_frames_load_roi_test(win_height, win_width, roi_steps);
+				return 1;
+			}
 			
 			cout << "argc = " << argc << endl;
 			helpMessage(argc, argv);
@@ -399,8 +409,182 @@ int main(int argc, char** argv)
 	return -1;	
 }
 
+int classify_frames_load_roi_test(int win_height, int win_width, int roi_steps)
+{
+	//initialize variables
+	cv::Mat reduced_sized_frame(32, 32, CV_8UC3);
+	cv::Mat cur_frame;
+	Mat bnn_input = Mat(win_width, win_height, CV_8UC3);
+	float_t scale_min = -1.0;
+    float_t scale_max = 1.0;
+	unsigned int frame_num = 0;	
+	int number_class = 10;
+	int output = 0;
+	
+	myfile.open ("result_load.csv",std::ios_base::app);
+	printf("Hello BNN\n");
+
+	deinit();
+	load_parameters(BNN_PARAMS.c_str()); 
+	printf("Done loading BNN\n");
+	
+	// Initialize the network 
+	FoldedMVInit("cnv-pynq");
+	network<mse, adagrad> nn;
+	makeNetwork(nn);
+
+	// Get a list of all the output classes
+	vector<string> classes;
+	ifstream file((USER_DIR + "params/cifar10/classes.txt").c_str());
+	cout << "Opening parameters at: " << (USER_DIR + "params/cifar10/classes.txt") << endl;
+	string str;
+	if (file.is_open())
+	{
+		cout << "Classes: [";
+		while (getline(file, str))
+		{
+			cout << str << ", "; 
+			classes.push_back(str);
+		}
+		cout << "]" << endl;
+		
+		file.close();
+	}
+	else
+	{
+		cout << "Failed to open classes.txt" << endl;
+	}
+
+	//Loading png images in test_images files
+	vector<cv::String> fn;
+	glob("test_images/*.jpg", fn, false);
+
+	vector<Mat> images;
+	size_t count = fn.size(); 
+	for (size_t i=0; i<count; i++)
+	{
+		cout<<"loading images "<< i <<endl;
+		images.push_back(imread(fn[i]));
+	}
+
+	// # of ExtMemWords per input
+	const unsigned int psi = 384; //paddedSize(imgs.size()*inWidth, bitsPerExtMemWord) / bitsPerExtMemWord;
+	// # of ExtMemWords per output
+	const unsigned int pso = 16; //paddedSize(64*outWidth, bitsPerExtMemWord) / bitsPerExtMemWord;
+	if(INPUT_BUF_ENTRIES < psi)
+	throw "Not enough space in accelBufIn";
+	if(OUTPUT_BUF_ENTRIES < pso)
+	throw "Not enough space in accelBufOut";
+	// allocate host-side buffers for packed input and outputs
+	//ExtMemWord * packedImages = new ExtMemWord[(count * psi)];
+	ExtMemWord * packedImages = (ExtMemWord *)sds_alloc((count * psi)*sizeof(ExtMemWord));
+	//ExtMemWord * packedOut = new ExtMemWord[(count * pso)];
+	ExtMemWord * packedOut = (ExtMemWord *)sds_alloc((count * pso)*sizeof(ExtMemWord));
+
+
+	for (size_t i=0; i<count; i++){
+		cur_frame = images[i];
+		int img_height = cur_frame.size().height;
+		int img_width = cur_frame.size().width;
+		std::vector<uint8_t> bgr;
+		int dist_x = 0, dist_y = 0; 
+		int x1=0, y1=0, x2=0, y2=0;
+		cv::Scalar colour = cv::Scalar(0, 255, 0);
+
+		y1 = dist_y;
+		y2 = dist_y + win_height;
+
+		while(true)
+		{
+			while(true)
+			{
+				x1 = dist_x;
+				x2 = dist_x + win_width;
+
+				if (x2>img_width){
+					break;
+				}
+
+				//Take only part of the frame from the original frame (center)
+				Rect R(Point(x1, y1), Point(x2, y2));
+				cv::resize(cur_frame(R), bnn_input, cv::Size(win_width, win_height), 0, 0, cv::INTER_CUBIC );
+				cv::resize(bnn_input, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );			
+				flatten_mat(reduced_sized_frame, bgr);
+				vec_t img;
+				std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+				quantiseAndPack<8, 1>(img, &packedImages[0], psi);
+
+
+				// Call the hardware function
+				kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,1,0);
+				if (frame_num != 1)
+				{
+					kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,0,1);
+				}
+				// Extract the output of BNN and classify result
+				std::vector<unsigned int> class_result;
+				tiny_cnn::vec_t outTest(number_class, 0);
+				copyFromLowPrecBuffer<unsigned short>(&packedOut[0], outTest);
+				for(unsigned int j = 0; j < number_class; j++) {			
+					class_result.push_back(outTest[j]);
+				}		
+				output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
+
+				putText(cur_frame, classes[output], Point(x1+5, y1+15), FONT_HERSHEY_PLAIN, 1 , colour);
+				rectangle(cur_frame, Point(x1, y1), Point(x2, y2), colour, 2); // draw a 32x32 box at the centre
+
+				//alternate colours to produce clearer results
+				if (colour == cv::Scalar(0, 255, 0)){
+					colour = cv::Scalar(0, 0, 255);
+				} else {
+					colour = cv::Scalar(0, 255, 0);
+				}
+
+				dist_x += roi_steps;
+			}
+
+			dist_x = 0;
+			dist_y += roi_steps;
+
+			x1 = dist_x;
+			y1 = dist_y;
+			x2 = dist_x + win_width;
+			y2 = dist_y + win_height;
+
+			if (y2>img_height){
+				break;
+			}
+		}
+
+		std::string expected_class = fn[i];
+		expected_class.erase(0,12);
+		std:string img_name = expected_class;
+		expected_class.erase(expected_class.find_last_of('.'));
+		expected_class.erase(std::remove_if(std::begin(expected_class), std::end(expected_class),[](char ch) { return std::isdigit(ch); }), expected_class.end());
+
+		imshow(img_name, images[i]);
+
+		vector<int> compression_params;
+		compression_params.push_back( CV_IMWRITE_JPEG_QUALITY );
+		compression_params.push_back( 100 );
+		std::string img_path = "./test_results/" + img_name;
+		imwrite(img_path,cur_frame, compression_params);
+
+		waitKey(0);
+	}
+
+	sds_free(packedImages);
+	sds_free(packedOut);
+	return 0;
+}
+
+
+
+
+
 /*
 	load all the jpg images in ./test_images for testing
+	output result to test_results
 
 */
 int classify_frames_load(int win_height, int win_width)
@@ -541,27 +725,19 @@ int classify_frames_load(int win_height, int win_width)
 		putText(cur_frame, classes[output], Point((img_width/2)-(win_width/2) + 10, (img_height/2)-(win_height/2)+10), FONT_HERSHEY_PLAIN, 1 , Scalar(0, 255, 0));
 		rectangle(cur_frame, Point((img_width/2)-(win_width/2), (img_height/2)-(win_height/2)), Point((img_width/2)+(win_width/2), (img_height/2)+(win_height/2)), Scalar(0, 0, 255)); // draw a 32x32 box at the centre
 		imshow(img_name, cur_frame);
-		//imshow("reduced", reduced_sized_frame);
-		//imshow("bnn_input",bnn_input);
-
 
 		vector<int> compression_params;
 		compression_params.push_back( CV_IMWRITE_JPEG_QUALITY );
 		compression_params.push_back( 100 );
 		std::string img_path = "./test_results/" + img_name;
 		imwrite(img_path,cur_frame, compression_params);
-		//imwrite("./test_results/extracted.jpg",bnn_input, compression_params);
-		//imwrite("./test_results/reduced.jpg",reduced_sized_frame, compression_params);
 
 		waitKey(0);
-
 	}
 
 	sds_free(packedImages);
 	sds_free(packedOut);
 	return 0;
-
-
 }
 
 // This function has BNN, software functions: capturing + pre-processing functions all piplined
