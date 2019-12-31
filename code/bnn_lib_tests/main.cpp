@@ -73,6 +73,7 @@ ofstream myfile;
 int classify_frames_cam_sw(int frames, int win_height, int win_width, int win_step, int win_length, int argv7);
 int classify_frames_load(int win_height, int win_width);
 int classify_frames_load_roi_test(int win_height, int win_width, int roi_count);
+int classify_frames_load_roi(int win_height, int win_width);
 
 //helper and lambda function
 void helpMessage(int argc, char** argv);
@@ -346,12 +347,100 @@ int output_filter(int arg_win_step, int arg_count, int arg_past_output, std::vec
 
 }
 
+int roi_detection (cv::Mat cur_mat)
+{
+	cv::Mat blur_mat, grey_mat, sobel_mat, thres_mat, canny_mat, contour_mat;
+	contour_mat = cur_mat.clone();
+	int scale = 1;
+	int delta = 0;
+	int ddepth = CV_16S;
+	
+	GaussianBlur(cur_mat, cur_mat, Size(3,3), 0, 0, BORDER_DEFAULT );
+	cv::cvtColor(cur_mat, grey_mat, CV_BGR2GRAY);
+
+	Mat grad_x, grad_y;
+	Mat abs_grad_x, abs_grad_y;
+	/// Gradient X
+	Sobel( grey_mat, grad_x, ddepth, 1, 0, 3, scale, delta, BORDER_DEFAULT );
+	/// Gradient Y
+	Sobel( grey_mat, grad_y, ddepth, 0, 1, 3, scale, delta, BORDER_DEFAULT );
+	convertScaleAbs( grad_x, abs_grad_x );
+	convertScaleAbs( grad_y, abs_grad_y );
+	addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, sobel_mat);
+
+	int thresh = 100;
+	Canny( sobel_mat, canny_mat, thresh, thresh*2 );
+
+	opening = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel);
+
+	Rect bounding_rect;
+	vector< cv::Point> cnts;
+	vector< vector< cv::Point> > contours;
+	vector< vector< cv::Point> > contours_filtered;
+	findContours(canny_mat, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+	for (size_t i = 0; i< contours.size(); i++) // iterate through each contour.
+    {
+        double area = contourArea(contours[i]);  //  Find the area of contour
+
+        if (area > 100)
+        {
+            contours_filtered.push_back (contours[i]);
+        }
+    }
+	//cnts = np.concatenate(contours_filtered);
+	//bounding_rect = boundingRect(cnts);
+
+	imshow( "sobel", sobel_mat);
+	waitKey(0);
+	imshow( "canny", canny_mat);
+	waitKey(0);
+
+
+	// double thresh = 127;
+	// double maxValue = 255; 
+	// threshold(grey_mat,thres_mat, thresh, maxValue, THRESH_BINARY_INV);
+
+	// Canny(thres_mat, canny_mat, 30, 128, 3, false);
+	// vector< vector< cv::Point> > contours;
+	// findContours(canny_mat, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+
+	// int largest_area = 0;
+    // int largest_contour_index = 0;
+    // Rect bounding_rect;
+	// for (size_t i = 0; i< contours.size(); i++) // iterate through each contour.
+    // {
+    //     double area = contourArea(contours[i]);  //  Find the area of contour
+
+    //     if (area > largest_area)
+    //     {
+    //         largest_area = area;
+    //         largest_contour_index = i;               //Store the index of largest contour
+    //         bounding_rect = boundingRect(contours[i]); // Find the bounding rectangle for biggest contour
+    //     }
+    // }
+	// drawContours(contour_mat, contours, largest_contour_index, Scalar(0, 255, 0), 2);
+
+	// imshow("greyed image", grey_mat);
+	// waitKey(0);
+	// imshow("thres image", thres_mat);
+	// waitKey(0);
+	// imshow("canny image", canny_mat);
+	// waitKey(0);
+	// imshow("roi image", contour_mat);
+	// waitKey(0);
+
+	//rectangle(cur_frame, Point(x1, y1), Point(x2, y2), colour, 2);
+	return 1;
+}
+
 
 /*
 	Command avaliable:
+	./BNN win_exp 5 12 1
 	./BNN cam_sw 128 1000 5 12 1 //operation, display window size, number of frames to be run, window step, window length, expected class
 	./BNN load 128 //operation, display window size
 	./BNN load_roi_test 300 150 //operations, window size, ROI step size in both x,y directions
+	./BNN load_roi 128 //operation canny, display window size
 */
 int main(int argc, char** argv)
 {
@@ -391,6 +480,11 @@ int main(int argc, char** argv)
 				classify_frames_load(win_height, win_width);
 				return 1;
 			}
+			else if (operation == "load_roi")
+			{
+				classify_frames_load_roi(win_height, win_width);
+				return 1;
+			}
 			else if (operation == "load_roi_test" && argc >= 4)
 			{
 				int roi_steps = atoi(argv[3]);
@@ -407,6 +501,168 @@ int main(int argc, char** argv)
 	cout << "argc = " << argc << endl;
 	helpMessage(argc, argv);
 	return -1;	
+}
+
+/*
+	load all the jpg images in ./test_images for testing, implementing ROI detection
+	output result to test_results
+
+*/
+int classify_frames_load_roi(int win_height, int win_width)
+{
+	//initialize variables
+	cv::Mat reduced_sized_frame(32, 32, CV_8UC3);
+	cv::Mat cur_frame;
+	Mat bnn_input = Mat(win_width, win_height, CV_8UC3);
+	float_t scale_min = -1.0;
+    float_t scale_max = 1.0;
+	unsigned int frame_num = 0;	
+	int number_class = 10;
+	int output = 0;
+	
+
+
+	myfile.open ("result_load.csv",std::ios_base::app);
+	printf("Hello BNN\n");
+
+	deinit();
+	load_parameters(BNN_PARAMS.c_str()); 
+	printf("Done loading BNN\n");
+	
+	// Initialize the network 
+	FoldedMVInit("cnv-pynq");
+	network<mse, adagrad> nn;
+	makeNetwork(nn);
+
+	// Get a list of all the output classes
+	vector<string> classes;
+	ifstream file((USER_DIR + "params/cifar10/classes.txt").c_str());
+	cout << "Opening parameters at: " << (USER_DIR + "params/cifar10/classes.txt") << endl;
+	string str;
+	if (file.is_open())
+	{
+		cout << "Classes: [";
+		while (getline(file, str))
+		{
+			cout << str << ", "; 
+			classes.push_back(str);
+		}
+		cout << "]" << endl;
+		
+		file.close();
+	}
+	else
+	{
+		cout << "Failed to open classes.txt" << endl;
+	}
+
+	//Loading png images in test_images files
+	vector<cv::String> fn;
+	glob("test_images/*.jpg", fn, false);
+
+	vector<Mat> images;
+	size_t count = fn.size(); 
+	for (size_t i=0; i<count; i++)
+	{
+		cout<<"loading images "<< i <<endl;
+		images.push_back(imread(fn[i]));
+		//std::string window_name = "Display" + std::to_string(i); //to display the image
+		//imshow(window_name, images[i]);
+		//waitKey(0);
+	}
+
+	// # of ExtMemWords per input
+	const unsigned int psi = 384; //paddedSize(imgs.size()*inWidth, bitsPerExtMemWord) / bitsPerExtMemWord;
+	// # of ExtMemWords per output
+	const unsigned int pso = 16; //paddedSize(64*outWidth, bitsPerExtMemWord) / bitsPerExtMemWord;
+	if(INPUT_BUF_ENTRIES < psi)
+	throw "Not enough space in accelBufIn";
+	if(OUTPUT_BUF_ENTRIES < pso)
+	throw "Not enough space in accelBufOut";
+	// allocate host-side buffers for packed input and outputs
+	//ExtMemWord * packedImages = new ExtMemWord[(count * psi)];
+	ExtMemWord * packedImages = (ExtMemWord *)sds_alloc((count * psi)*sizeof(ExtMemWord));
+	//ExtMemWord * packedOut = new ExtMemWord[(count * pso)];
+	ExtMemWord * packedOut = (ExtMemWord *)sds_alloc((count * pso)*sizeof(ExtMemWord));
+
+
+	for (size_t i=0; i<count; i++){
+		cur_frame = images[i];
+		int img_height = cur_frame.size().height;
+		int img_width = cur_frame.size().width;
+		//Mat bnn_input = Mat(cv::Size(win_width, win_height));
+		std::vector<uint8_t> bgr;
+
+		//detecting ROI
+		cout << "trying to detect ROI" << endl;
+		roi_detection(cur_frame);
+
+		if(win_height == 0)
+		{
+			cv::resize(cur_frame, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );	
+			flatten_mat(reduced_sized_frame, bgr);			
+			vec_t img;
+			std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+			quantiseAndPack<8, 1>(img, &packedImages[0], psi);										
+		} else {	
+			// Take only part of the frame from the original frame (center)
+			Rect R(Point((img_width/2)-(win_width/2), (img_height/2)-(win_height/2)), Point((img_width/2)+(win_width/2), (img_height/2)+(win_height/2)));
+
+			cv::resize(cur_frame(R), bnn_input, cv::Size(win_width, win_height), 0, 0, cv::INTER_CUBIC );
+			cv::resize(bnn_input, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );			
+			flatten_mat(reduced_sized_frame, bgr);
+			vec_t img;
+			std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+			quantiseAndPack<8, 1>(img, &packedImages[0], psi);															
+		}
+
+		// Call the hardware function
+		kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,1,0);
+		if (frame_num != 1)
+		{
+			kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,0,1);
+		}
+		// Extract the output of BNN and classify result
+		std::vector<unsigned int> class_result;
+		tiny_cnn::vec_t outTest(number_class, 0);
+		copyFromLowPrecBuffer<unsigned short>(&packedOut[0], outTest);
+		for(unsigned int j = 0; j < number_class; j++) {			
+			class_result.push_back(outTest[j]);
+		}		
+		output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
+
+		cout<< "classification result: " << classes[output] << endl;
+
+
+		std::string expected_class = fn[i];
+		expected_class.erase(0,12);
+		std:string img_name = expected_class;
+		expected_class.erase(expected_class.find_last_of('.'));
+		expected_class.erase(std::remove_if(std::begin(expected_class), std::end(expected_class),[](char ch) { return std::isdigit(ch); }), expected_class.end());
+
+		if (expected_class == classes[output])
+		{
+			cout<<"correctly identified "<< expected_class <<endl;
+		} else{
+			cout<<"cannot identify it is a " << expected_class <<endl;
+		}
+
+		putText(cur_frame, classes[output], Point((img_width/2)-(win_width/2) + 10, (img_height/2)-(win_height/2)+10), FONT_HERSHEY_PLAIN, 1 , Scalar(0, 255, 0));
+		rectangle(cur_frame, Point((img_width/2)-(win_width/2), (img_height/2)-(win_height/2)), Point((img_width/2)+(win_width/2), (img_height/2)+(win_height/2)), Scalar(0, 0, 255)); // draw a 32x32 box at the centre
+		imshow(img_name, cur_frame);
+
+		vector<int> compression_params;
+		compression_params.push_back( CV_IMWRITE_JPEG_QUALITY );
+		compression_params.push_back( 100 );
+		std::string img_path = "./test_results/" + img_name;
+		imwrite(img_path,cur_frame, compression_params);
+
+		waitKey(0);
+	}
+
+	sds_free(packedImages);
+	sds_free(packedOut);
+	return 0;
 }
 
 int classify_frames_load_roi_test(int win_height, int win_width, int roi_steps)
