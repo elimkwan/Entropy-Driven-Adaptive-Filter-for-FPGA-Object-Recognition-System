@@ -1,21 +1,37 @@
 #ifndef win
 #define win
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <algorithm>
+
+using namespace std;
 
 class Win_filter{
-    public:
-        unsigned int step;
-        unsigned int length;
-        unsigned int past_output;
-        std::vector<std::vector<float>> memory;
-        std::vector<float> weights;
+    private:
+        void print_vector(std::vector<float> vec);
+        float expDecay(float lambda, int t, int N = 1); //supporting math functions
+        //std::vector<float> normalise(std::vector<float> &vec); //supporting math functions
+        vector<float> calculate_certainty(const std::vector<float> &arg_vec); //supporting math functions
 
-        Win_filter(){
-            step = 0;
-            length = 0;
+    public:
+        unsigned int wstep;
+        unsigned int wlength;
+        std::vector<float> wweights;
+        std::vector<std::vector<float>> wmemory;
+        unsigned int wpast_output;
+        unsigned int wcount;
+
+        Win_filter(unsigned int step, unsigned int length){
+            wstep = step;
+            wlength = length;
+            wweights.resize(length);
+            wcount = 0;
         }
 
-        void analysis();
-    
+        unsigned int analysis();
+        void init_weights(float lambda);
+        void update_memory(const std::vector<float> &class_result);
 };
 
 #endif

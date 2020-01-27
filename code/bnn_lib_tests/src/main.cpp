@@ -95,12 +95,12 @@ double clockToMilliseconds(clock_t ticks){
 }
 
 
-template<typename T>
-float expDecay(T lambda, int t, int N = 1)
-{
-	// Remove N if it is not needed
-	return N * std::exp(-(lambda * (T)t));
-}
+// template<typename T>
+// float expDecay(T lambda, int t, int N = 1)
+// {
+// 	// Remove N if it is not needed
+// 	return N * std::exp(-(lambda * (T)t));
+// }
 
 
 // Convert matrix into a vector 
@@ -125,17 +125,17 @@ void flatten_mat(cv::Mat &m, std::vector<T> &v)
 	}
 }
 
-template<typename T>
-inline std::vector<float> normalise(std::vector<T> &vec)
-{	
-	std::vector<float> cp(vec.begin(), vec.end());
-	T mx = *max_element(std::begin(cp), std::end(cp));
+// template<typename T>
+// inline std::vector<float> normalise(std::vector<T> &vec)
+// {	
+// 	std::vector<float> cp(vec.begin(), vec.end());
+// 	T mx = *max_element(std::begin(cp), std::end(cp));
 	
-	for(auto &elem : cp)
-		elem = (float)elem / mx;
+// 	for(auto &elem : cp)
+// 		elem = (float)elem / mx;
 	
-	return cp;
-}
+// 	return cp;
+// }
 
 /*
 	Calculate certainty
@@ -143,27 +143,27 @@ inline std::vector<float> normalise(std::vector<T> &vec)
 	@para arg_vec: input vector with floating points
 	@return vector [e^(class1 probability)/sum, e^(class2 probability)/sum... e^(class10 probability)/sum], where sum = summation of e^(class probability) of all the classes
 */
-template<typename T>
-vector<float> calculate_certainty(std::vector<T> &arg_vec)
-{
-	// Normalise the vector
-	std::vector<float> norm_vec = normalise(arg_vec);
-	float mx = *max_element(std::begin(norm_vec), std::end(norm_vec));
-	float sum = 0;
-	for(auto const &elem : norm_vec)
-		sum += exp(elem);
+// template<typename T>
+// vector<float> calculate_certainty(std::vector<T> &arg_vec)
+// {
+// 	// Normalise the vector
+// 	std::vector<float> norm_vec = normalise(arg_vec);
+// 	float mx = *max_element(std::begin(norm_vec), std::end(norm_vec));
+// 	float sum = 0;
+// 	for(auto const &elem : norm_vec)
+// 		sum += exp(elem);
 	
-	if(sum == 0){
-		std::cout << "Division by zero, sum = 0" << std::endl;
-	}
-	// Try to use OpenMP
-	for(int i=0; i<10;i++)
-	{
-		norm_vec[i] = exp(norm_vec[i]) / sum;
-	}
+// 	if(sum == 0){
+// 		std::cout << "Division by zero, sum = 0" << std::endl;
+// 	}
+// 	// Try to use OpenMP
+// 	for(int i=0; i<10;i++)
+// 	{
+// 		norm_vec[i] = exp(norm_vec[i]) / sum;
+// 	}
 
-	return norm_vec;
-}
+// 	return norm_vec;
+// }
 
 
 
@@ -322,6 +322,7 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 	tiny_cnn::vec_t outTest(number_class, 0);
 	const unsigned int count = 1;
 	std::vector<uint8_t> bgr;
+	std::vector<std::vector<float> > results_history; //for storing the classification result of previous frame
 
     // Initialize the network 
     deinit();
@@ -370,6 +371,11 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 
 	Roi_filter r_filter;
 
+	//output filter with windowing techniques
+	Win_filter w_filter(win_step, win_length);
+	w_filter.init_weights(0.2);
+	cout << "size of weight:" << w_filter.wweights.size() << endl;
+
     while(frame_num < size){
         // Data preprocessing: transform cur_frame to src then to bnn_input
         if (in_type == "pics"){
@@ -395,29 +401,36 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 			kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,0,1);
 		}
 		// Extract the output of BNN and classify result
-		std::vector<unsigned int> class_result;
+		std::vector<float> class_result;
 		copyFromLowPrecBuffer<unsigned short>(&packedOut[0], outTest);
 		for(unsigned int j = 0; j < number_class; j++) {			
 			class_result.push_back(outTest[j]);
 		}		
 		output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
 
-		cout << "output: " << output << endl;
+		//cout << "output: " << output << endl;
         //Data post-processing:
+
+		w_filter.update_memory(class_result);
+		unsigned int adjusted_output = w_filter.analysis();
+		std::cout << "-------------------------------------------------"<< endl;
+		std::cout << "raw output: " << classes[output] << endl;
+		std::cout << "adjusted output: " << classes[adjusted_output] << endl;
+		std::cout << "-------------------------------------------------"<< endl;
         //output_filter(output);
-		results_history.insert(results_history.begin(), calculate_certainty(class_result));
-		if (results_history.size() > win_length)
-		{
-			results_history.pop_back();
-		}
-		int adjusted_output = 0;
-		adjusted_output = output_filter(win_step, step_counts, past_output, results_history, weights);
-		if (step_counts < win_step) {
-			step_counts++;
-		} else {
-			step_counts = 0;
-			past_output = adjusted_output;
-		}
+		// results_history.insert(results_history.begin(), calculate_certainty(class_result));
+		// if (results_history.size() > win_length)
+		// {
+		// 	results_history.pop_back();
+		// }
+		// int adjusted_output = 0;
+		// adjusted_output = output_filter(win_step, step_counts, past_output, results_history, weights);
+		// if (step_counts < win_step) {
+		// 	step_counts++;
+		// } else {
+		// 	step_counts = 0;
+		// 	past_output = adjusted_output;
+		// }
 
 		//Display output
 		if (in_type == "pics"){
@@ -429,7 +442,7 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 			imwrite(img_path,cur_frame, compression_params);
 			//waitKey(0);
 		} else {
-			putText(cur_frame, classes[output], Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));	
+			putText(cur_frame, classes[adjusted_output], Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));	
 			imshow("Original", cur_frame);
 			waitKey(25);	
 		}
