@@ -31,18 +31,19 @@ unsigned int Win_filter::analysis(){
 		int result_index = distance(wmemory[0].begin(), max_element(wmemory[0].begin(), wmemory[0].end()));
 		//float result_value = 0.00f;
 		//result_value = std::max_element(current_result.begin(), current_result.end());
-		std::cout << "real time data results index: " << result_index << std::endl;
+		//std::cout << "real time data results index: " << result_index << std::endl;
 		//print_vector(arg_results_history[0]);
 		return result_index;
 	}
 
 	if (wcount < wstep){
+		cout << "outputing wcount < wstep data" << endl;
         wcount++;
 		return wpast_output;
 
 	}else if ( wcount == wstep){
 
-		cout << "outputing current analysised result" << endl;
+		cout << "outputing wcount == wstep, current analysised result" << endl;
 		std::vector<float> adjusted_results(10, 0);
 		for(int i = 0; i < wmemory.size(); i++)
 		{ 
@@ -65,16 +66,12 @@ unsigned int Win_filter::analysis(){
 
 //update result_history
 void Win_filter::update_memory(const std::vector<float> &class_result){
+	cout << "update memory" << endl;
     wmemory.insert(wmemory.begin(), Win_filter::calculate_certainty(class_result));
     if (wmemory.size() > wlength)
     {
         wmemory.pop_back();
     }
-    //std::cout<< "memoryyyyy" << wmemory.size() << endl;
-
-    // for(int i = 0; i < wmemory.size() ; i++){
-    //     print_vector(wmemory[i]);
-    // }    
 }
 
 /*

@@ -26,6 +26,7 @@ class Win_filter{
             wstep = step;
             wlength = length;
             wweights.resize(length);
+            wpast_output = 0;
             wcount = 0;
         }
 

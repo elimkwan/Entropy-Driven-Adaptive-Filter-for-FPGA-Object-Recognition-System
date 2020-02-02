@@ -54,10 +54,7 @@ BNN: $(SOURCE) foldedmv-offload.o rawhls-offload.o win.o roi_filter.o
 	$(CXX) -o $@ $< foldedmv-offload.o rawhls-offload.o win.o roi_filter.o $(LIBS) $(XI_CFLAGS) $(XI_LDFLAGS)  $(LDFLAGS)
 
 clean-all:
-	rm -f  $(XI_PROGs) foldedmv-offload.o rawhls-offload.o win.o roi.o 
-
-clean-roi:
-	rm -f $(XI_PROGs) roi_filter.o
+	rm -f  $(XI_PROGs) foldedmv-offload.o rawhls-offload.o win.o roi_filter.o
 
 clean:
-	rm -f  $(XI_PROGs) win.o
+	rm -f  $(XI_PROGs) win.o roi_filter.o

@@ -94,15 +94,6 @@ double clockToMilliseconds(clock_t ticks){
     return (ticks/(double)CLOCKS_PER_SEC)*1000.0;
 }
 
-
-// template<typename T>
-// float expDecay(T lambda, int t, int N = 1)
-// {
-// 	// Remove N if it is not needed
-// 	return N * std::exp(-(lambda * (T)t));
-// }
-
-
 // Convert matrix into a vector 
 // |1 0 0|
 // |0 1 0| -> [1 0 0 0 1 0 0 0 1]
@@ -124,48 +115,6 @@ void flatten_mat(cv::Mat &m, std::vector<T> &v)
 		}
 	}
 }
-
-// template<typename T>
-// inline std::vector<float> normalise(std::vector<T> &vec)
-// {	
-// 	std::vector<float> cp(vec.begin(), vec.end());
-// 	T mx = *max_element(std::begin(cp), std::end(cp));
-	
-// 	for(auto &elem : cp)
-// 		elem = (float)elem / mx;
-	
-// 	return cp;
-// }
-
-/*
-	Calculate certainty
-
-	@para arg_vec: input vector with floating points
-	@return vector [e^(class1 probability)/sum, e^(class2 probability)/sum... e^(class10 probability)/sum], where sum = summation of e^(class probability) of all the classes
-*/
-// template<typename T>
-// vector<float> calculate_certainty(std::vector<T> &arg_vec)
-// {
-// 	// Normalise the vector
-// 	std::vector<float> norm_vec = normalise(arg_vec);
-// 	float mx = *max_element(std::begin(norm_vec), std::end(norm_vec));
-// 	float sum = 0;
-// 	for(auto const &elem : norm_vec)
-// 		sum += exp(elem);
-	
-// 	if(sum == 0){
-// 		std::cout << "Division by zero, sum = 0" << std::endl;
-// 	}
-// 	// Try to use OpenMP
-// 	for(int i=0; i<10;i++)
-// 	{
-// 		norm_vec[i] = exp(norm_vec[i]) / sum;
-// 	}
-
-// 	return norm_vec;
-// }
-
-
 
 void makeNetwork(network<mse, adagrad> & nn) {
   nn
@@ -309,6 +258,9 @@ int main(int argc, char** argv)
 
 int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int frame_size, unsigned int win_step, unsigned int win_length, bool with_roi, unsigned int expected_class){
 
+	myfile.open ("result.csv",std::ios_base::app);
+	myfile << "\nFrame No., Time per frame(us), frame rate (us), Output , Adjusted Output \n";
+
     //Initialize variables
 	cv::Mat reduced_sized_frame(32, 32, CV_8UC3);
 	cv::Mat cur_frame, src;
@@ -323,6 +275,7 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 	const unsigned int count = 1;
 	std::vector<uint8_t> bgr;
 	std::vector<std::vector<float> > results_history; //for storing the classification result of previous frame
+	float identified = 0.0 , identified_adj = 0.0, total_time = 0.0;
 
     // Initialize the network 
     deinit();
@@ -352,8 +305,8 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 	{
 		cout << "cannot open camera" << endl;
 	} 
-	cap.set(CV_CAP_PROP_FRAME_WIDTH,frame_size);
-	cap.set(CV_CAP_PROP_FRAME_HEIGHT,frame_size);
+	cap.set(CV_CAP_PROP_FRAME_WIDTH,frame_width);
+	cap.set(CV_CAP_PROP_FRAME_HEIGHT,frame_height);
 	//std::cout << "\nCamera resolution = " << cap.get(CV_CAP_PROP_FRAME_WIDTH) << "x" << cap.get(CV_CAP_PROP_FRAME_HEIGHT) << std::endl;
 	size = no_of_frame;
 
@@ -369,7 +322,7 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
         //size = no. of frame in the video
     }
 
-	Roi_filter r_filter;
+	Roi_filter r_filter(frame_width,frame_height);
 
 	//output filter with windowing techniques
 	Win_filter w_filter(win_step, win_length);
@@ -377,6 +330,8 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 	cout << "size of weight:" << w_filter.wweights.size() << endl;
 
     while(frame_num < size){
+		auto t1 = chrono::high_resolution_clock::now(); //time statistics
+
         // Data preprocessing: transform cur_frame to src then to bnn_input
         if (in_type == "pics"){
             cur_frame = frames[frame_num];
@@ -384,11 +339,15 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 		else {
 			cap >> cur_frame;
         }
-        src = r_filter.cur_to_src(cur_frame, frame_size);
+
+		//if not given frame size = 0 return full frame
+		//if given frame size crop the center 128*128 out
+		Rect roi = r_filter.real_roi(cur_frame, frame_size);
+        src = cur_frame(roi);
 
         //Resizing frame for bnn
-        cv::resize(src, bnn_input, cv::Size(frame_size, frame_size), 0, 0, cv::INTER_CUBIC );
-        cv::resize(bnn_input, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );			
+        //cv::resize(src, bnn_input, cv::Size(frame_size, frame_size), 0, 0, cv::INTER_CUBIC );
+        cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );			
         flatten_mat(reduced_sized_frame, bgr);
         vec_t img;
         std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
@@ -408,29 +367,41 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 		}		
 		output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
 
-		//cout << "output: " << output << endl;
         //Data post-processing:
-
 		w_filter.update_memory(class_result);
 		unsigned int adjusted_output = w_filter.analysis();
 		std::cout << "-------------------------------------------------"<< endl;
 		std::cout << "raw output: " << classes[output] << endl;
 		std::cout << "adjusted output: " << classes[adjusted_output] << endl;
 		std::cout << "-------------------------------------------------"<< endl;
-        //output_filter(output);
-		// results_history.insert(results_history.begin(), calculate_certainty(class_result));
-		// if (results_history.size() > win_length)
-		// {
-		// 	results_history.pop_back();
-		// }
-		// int adjusted_output = 0;
-		// adjusted_output = output_filter(win_step, step_counts, past_output, results_history, weights);
-		// if (step_counts < win_step) {
-		// 	step_counts++;
-		// } else {
-		// 	step_counts = 0;
-		// 	past_output = adjusted_output;
-		// }
+
+		cout <<"expected" << expected_class <<" " << adjusted_output <<endl;
+		if (int(expected_class) == int(output)){
+			//cout << "debug" <<endl;
+			identified ++;
+		}
+		if (int(expected_class) == int(adjusted_output)){
+			//cout << "debug 2" <<endl;
+			identified_adj++;
+		}
+
+		//testing opt win length and step
+		auto t2 = chrono::high_resolution_clock::now();	//time statistics
+		auto time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
+		float period = (float)time/1000000;
+		float rate = 1/((float)period); //rate for processing 1 frame
+		myfile << frame_num << "," << period << "," << rate << "," << classes[output] << "," << classes[adjusted_output] <<"\n";
+		if (frame_num != 0){
+			total_time = total_time + period;
+		}
+
+		//draw the naive roi on curframe
+		if (frame_size != 0)
+		{			
+			rectangle(cur_frame, Point((frame_width/2)-(frame_size/2), (frame_height/2)-(frame_size/2)), Point((frame_width/2)+(frame_size/2), (frame_height/2)+(frame_size/2)), Scalar(0, 0, 255)); // draw a 32x32 box at the centre
+		} else {
+			rectangle(cur_frame, roi, Scalar(0, 0, 255));
+		}
 
 		//Display output
 		if (in_type == "pics"){
@@ -449,6 +420,15 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 
         frame_num++;
     }
+
+	float accuracy = 100.0*((float)identified/(float)frame_num);
+	float accuracy_adj = 100.0*((float)identified_adj/(float)frame_num);
+	float avg_rate = 1/((float)win_step*((float)total_time/(float)no_of_frame)); //avg rate for processing win_step number of frame
+	cout << identified << " " << frame_num << " " << identified_adj << " " << total_time << " " << win_step << " " << no_of_frame << endl;;
+	myfile << "\n Accuracy, Adjusted Accuracy, Avg Classification Rate,";
+	myfile << "\n" << accuracy << "," << accuracy_adj << "," << avg_rate;
+	myfile << "\n \n";
+	myfile.close();
 
 	if (cap.open(0)){
 		cap.release();

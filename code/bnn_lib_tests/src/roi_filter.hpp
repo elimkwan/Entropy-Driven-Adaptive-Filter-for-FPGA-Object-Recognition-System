@@ -10,13 +10,16 @@ class Roi_filter{
         // Mat* dest;
         // int frame_size;
 
-        // Roi_filter(){
-        //     src = 0x0;
-        //     dest = 0x0;
-        // }
+        int frame_width;
+        int frame_height;
 
-        cv::Mat cur_to_src(Mat img, unsigned int frame_size);
-        void detection();
+        Roi_filter(int w,int h){
+            frame_width = w;
+            frame_height = h;
+        }
+
+        Rect naive_roi(const Mat& img, unsigned int roi_size);
+        Rect real_roi(const Mat& img, unsigned int roi_size)
     
 };
 
