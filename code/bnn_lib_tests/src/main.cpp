@@ -396,12 +396,14 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 		}
 
 		//draw the naive roi on curframe
-		if (frame_size != 0)
-		{			
-			rectangle(cur_frame, Point((frame_width/2)-(frame_size/2), (frame_height/2)-(frame_size/2)), Point((frame_width/2)+(frame_size/2), (frame_height/2)+(frame_size/2)), Scalar(0, 0, 255)); // draw a 32x32 box at the centre
-		} else {
-			rectangle(cur_frame, roi, Scalar(0, 0, 255));
-		}
+		// if (frame_size != 0)
+		// {			
+		// 	rectangle(cur_frame, Point((frame_width/2)-(frame_size/2), (frame_height/2)-(frame_size/2)), Point((frame_width/2)+(frame_size/2), (frame_height/2)+(frame_size/2)), Scalar(0, 0, 255)); // draw a 32x32 box at the centre
+		// } else {
+		// 	rectangle(cur_frame, roi, Scalar(0, 0, 255));
+		// }
+
+		rectangle(cur_frame, roi, Scalar(0, 0, 255));
 
 		//Display output
 		if (in_type == "pics"){

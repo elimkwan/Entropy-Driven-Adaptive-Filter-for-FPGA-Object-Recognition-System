@@ -57,4 +57,4 @@ clean-all:
 	rm -f  $(XI_PROGs) foldedmv-offload.o rawhls-offload.o win.o roi_filter.o
 
 clean:
-	rm -f  $(XI_PROGs) win.o roi_filter.o
+	rm -f  $(XI_PROGs) roi_filter.o
