@@ -320,9 +320,14 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 		cap.release();
         //load video
         //size = no. of frame in the video
-    }
+    } else {
+		cap >> cur_frame;
+	}
 
 	Roi_filter r_filter(frame_width,frame_height);
+	r_filter.init_enhanced_roi(cur_frame);
+
+	//Roi_filter optical_f_roi(frame_width,frame_height, cur_frame);
 
 	//output filter with windowing techniques
 	Win_filter w_filter(win_step, win_length);
@@ -339,10 +344,19 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 		else {
 			cap >> cur_frame;
         }
+		
+		Rect roi;
+		Rect full_frame(Point(0,0), Point(frame_width, frame_height));
+		//testing 
+		if (frame_num < 2){
+			roi = full_frame;
+			r_filter.init_enhanced_roi(cur_frame);
+		} else {
+			roi=r_filter.enhanced_roi(cur_frame);
+		}
 
 		//if not given frame size = 0 return full frame
 		//if given frame size crop the center 128*128 out
-		Rect roi = r_filter.real_roi(cur_frame, frame_size);
         src = cur_frame(roi);
 
         //Resizing frame for bnn
@@ -371,6 +385,7 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 		w_filter.update_memory(class_result);
 		unsigned int adjusted_output = w_filter.analysis();
 		std::cout << "-------------------------------------------------"<< endl;
+		std::cout << "frame num: " << frame_num << endl;
 		std::cout << "raw output: " << classes[output] << endl;
 		std::cout << "adjusted output: " << classes[adjusted_output] << endl;
 		std::cout << "-------------------------------------------------"<< endl;
@@ -405,6 +420,14 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 
 		rectangle(cur_frame, roi, Scalar(0, 0, 255));
 
+		// if (optical_mask.empty() != true){
+		// 	//add(stored_mat, mask, pic);
+		// 	cur_frame.copyTo(cur_frame, optical_mask);
+		// 	cout << "mask is empty" << endl;
+		// } else {
+		// 	cout << "mask is not empty, can you see it?" << endl;
+		// }
+	
 		//Display output
 		if (in_type == "pics"){
 			//imshow("Original", cur_frame);
