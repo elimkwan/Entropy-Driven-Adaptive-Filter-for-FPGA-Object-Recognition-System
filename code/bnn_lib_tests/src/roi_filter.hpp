@@ -2,6 +2,7 @@
 #define roi_filter
 #include "opencv2/opencv.hpp"
 #include <iostream>
+#include <fstream>
 // #include "opencv2/core.hpp"
 // #include <opencv2/highgui.hpp>
 // #include <opencv2/imgproc.hpp>
@@ -18,8 +19,9 @@ class Roi_filter{
     cv::Mat contour_map();
     cv::Mat dense_optical_flow(const Mat& contour_mat);
     cv::Mat weighted_map(const Mat& cur_mat);
-    Rect bounding_rect(const Mat& cur_mat);
+    Rect colour_seg(const Mat& cur, int low_thres, int up_thres);
     void update_enhanced_roi_param (const Mat& motion_mat);
+    cv::Mat simple_optical_flow();
     
 
     public:
@@ -38,7 +40,7 @@ class Roi_filter{
         }
 
         Rect naive_roi(const Mat& img, unsigned int roi_size);
-        Rect basic_roi(const Mat& img);
+        Rect basic_roi(const Mat& img, bool strict);
         void init_enhanced_roi(const Mat& img);
         Rect enhanced_roi (const Mat& img);
     

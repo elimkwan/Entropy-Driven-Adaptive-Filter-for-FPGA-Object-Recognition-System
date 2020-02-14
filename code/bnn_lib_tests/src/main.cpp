@@ -52,9 +52,11 @@
 #include <omp.h>  		//for sleep
 //#include <opencv2/core/utility.hpp>
 
+#include <main.hpp>
 #include "load.hpp"
 #include "roi_filter.hpp"
 #include "win.hpp"
+#include "uncertainty.hpp"
 
 
 using namespace std;
@@ -62,6 +64,7 @@ using namespace tiny_cnn;
 using namespace tiny_cnn::activation;
 using namespace cv;
 using namespace load;
+using namespace basic;
 
 #define frame_width 320		//176	//320	//640
 #define frame_height 240		//144	//240	//480
@@ -78,6 +81,7 @@ ofstream myfile;
 //main functions
 int classify_frames(std::string in_type, unsigned int frame_num, unsigned int frame_size, unsigned int win_step, unsigned int win_length, bool roi, unsigned int expected_class);
 
+
 template<typename T>
 inline void print_vector(std::vector<T> &vec)
 {
@@ -89,10 +93,10 @@ inline void print_vector(std::vector<T> &vec)
 	std::cout << "}" <<endl;
 }
 
-double clockToMilliseconds(clock_t ticks){
-    // units/(units/time) => time (seconds) * 1000 = milliseconds
-    return (ticks/(double)CLOCKS_PER_SEC)*1000.0;
-}
+// double clockToMilliseconds(clock_t ticks){
+//     // units/(units/time) => time (seconds) * 1000 = milliseconds
+//     return (ticks/(double)CLOCKS_PER_SEC)*1000.0;
+// }
 
 // Convert matrix into a vector 
 // |1 0 0|
@@ -259,7 +263,11 @@ int main(int argc, char** argv)
 int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int frame_size, unsigned int win_step, unsigned int win_length, bool with_roi, unsigned int expected_class){
 
 	myfile.open ("result.csv",std::ios_base::app);
-	myfile << "\nFrame No., Time per frame(us), frame rate (us), Output , Adjusted Output \n";
+	//myfile << "\nFrame No., Time per frame(us), frame rate (us), Output , Adjusted Output \n";
+	myfile << "\nFrame No., Time per frame(us), frame rate (us), Output , Adjusted Output, cap_time, preprocess_time, bnn_time, window_filter_time, uncertainty_time, uncertainty_scores, ma, d_ma, ma_cross, d_area, d_out \n";
+
+	//Basic Function
+
 
     //Initialize variables
 	cv::Mat reduced_sized_frame(32, 32, CV_8UC3);
@@ -334,6 +342,11 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 	w_filter.init_weights(0.2);
 	cout << "size of weight:" << w_filter.wweights.size() << endl;
 
+	//output uncertainty f1 score
+	Uncertainty u_filter(1.f,1.f,1.f,1.f,1.f,5);
+
+	//std::vector<float> past_pmf = {0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
+
     while(frame_num < size){
 		auto t1 = chrono::high_resolution_clock::now(); //time statistics
 
@@ -344,15 +357,20 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 		else {
 			cap >> cur_frame;
         }
+
+		auto t2 = chrono::high_resolution_clock::now();	//time statistics
+		auto cap_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
 		
 		Rect roi;
 		Rect full_frame(Point(0,0), Point(frame_width, frame_height));
+		
 		//testing 
 		if (frame_num < 2){
 			roi = full_frame;
-			r_filter.init_enhanced_roi(cur_frame);
+			//r_filter.init_enhanced_roi(cur_frame);
 		} else {
-			roi=r_filter.enhanced_roi(cur_frame);
+			//roi=r_filter.enhanced_roi(cur_frame);
+			roi = r_filter.basic_roi(cur_frame, false);
 		}
 
 		//if not given frame size = 0 return full frame
@@ -366,7 +384,10 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
         vec_t img;
         std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
         quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-    
+	
+		auto t3 = chrono::high_resolution_clock::now();	//time statistics
+		auto preprocess_time = chrono::duration_cast<chrono::microseconds>( t3 - t2 ).count();
+
         // Call the hardware function
 		kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,1,0);
 		if (frame_num != 1)
@@ -376,14 +397,49 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 		// Extract the output of BNN and classify result
 		std::vector<float> class_result;
 		copyFromLowPrecBuffer<unsigned short>(&packedOut[0], outTest);
+		// cout << "\npackedOut" << endl;
+		// print_vector(&packedOut);
+		// cout << "\noutTest" << endl;
+		// print_vector(outTest);
 		for(unsigned int j = 0; j < number_class; j++) {			
 			class_result.push_back(outTest[j]);
-		}		
+		}
+		cout << "\nclass_result" << endl;
+		print_vector(class_result);		
 		output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
+
+		auto t4 = chrono::high_resolution_clock::now();	//time statistics
+		auto bnn_time = chrono::duration_cast<chrono::microseconds>( t4 - t3 ).count();
 
         //Data post-processing:
 		w_filter.update_memory(class_result);
 		unsigned int adjusted_output = w_filter.analysis();
+
+		auto t5 = chrono::high_resolution_clock::now();	//time statistics
+		auto window_filter_time = chrono::duration_cast<chrono::microseconds>( t5 - t4 ).count();
+
+		// std::vector<float> pmf = basic::softmax(class_result);
+		// cout<< "Probability list" <<endl;
+		// print_vector(pmf);
+
+		// float uncertainty = basic::entropy(pmf);
+		// cout << "entropy: " << uncertainty <<endl;
+
+		// float cross_en = basic::cross_entropy(pmf, past_pmf);
+		// cout << "cross entropy: " << cross_en <<endl;
+		// past_pmf = pmf;
+
+		// float sd = basic::sd(class_result);
+		// cout << "standard deviation: " << sd <<endl;
+
+		//func return: f1, ma, d_ma, ma_cross, d_area, d_out
+		//float uncertainty_scores, ma, d_ma, ma_cross, d_area, d_out;
+		vector<float> u;
+		std::cout << "---debug 1 ------" << endl;
+		u = u_filter.wrapper(class_result, roi.area(), output);
+		
+		
+
 		std::cout << "-------------------------------------------------"<< endl;
 		std::cout << "frame num: " << frame_num << endl;
 		std::cout << "raw output: " << classes[output] << endl;
@@ -401,11 +457,13 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 		}
 
 		//testing opt win length and step
-		auto t2 = chrono::high_resolution_clock::now();	//time statistics
-		auto time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-		float period = (float)time/1000000;
+		auto t6 = chrono::high_resolution_clock::now();	//time statistics
+		auto uncertainty_time = chrono::duration_cast<chrono::microseconds>( t6 - t5 ).count();
+		auto overall_time = chrono::duration_cast<chrono::microseconds>( t5 - t1 ).count();
+		float period = (float)overall_time/1000000;
 		float rate = 1/((float)period); //rate for processing 1 frame
-		myfile << frame_num << "," << period << "," << rate << "," << classes[output] << "," << classes[adjusted_output] <<"\n";
+		//myfile << frame_num << "," << period << "," << rate << "," << classes[output] << "," << classes[adjusted_output] <<"\n";
+		myfile << frame_num << "," << period << "," << rate << "," << classes[output] << "," << classes[adjusted_output] << "," << cap_time << "," << preprocess_time << "," <<  bnn_time << "," << window_filter_time << "," << uncertainty_time << "," <<  u[0] << "," << u[1] << "," << u[2] << "," <<  u[3] << "," <<  u[4] << "," <<  u[5] << "\n";
 		if (frame_num != 0){
 			total_time = total_time + period;
 		}
