@@ -11,42 +11,49 @@ using namespace std;
 
 class Uncertainty{
     private:
-        void print_vector(std::vector<float> &vec);
 
-        std::vector<float> normalise(std::vector<float> &cp);
-        std::vector<float> softmax(std::vector<float> &arg_vec);
-        float entropy(std::vector<float> &arg_vec);
-        void insert_buf(std::vector<float> &arg_vec, float &elem);
-        void constraint_buf(std::vector<float> &arg_vec);
-        void update_sum(float &elem);
-        float init_mean(int n);
-        float moving_avg(std::vector<float> &arg_vec, int n);
-        float welford_var(float x, int k);
-        int update_state(float ma, float old_ma, float old_sd);
+        std::vector<double> __entropy_buf;
+        std::vector<double> __ma_buf;
+        int __lambda;
+        int __state;
+        double __data_sum;
+        double __running_mean;
+        double __running_sd;
+        double __aggrM;
+        double __mean_of_ma;
+        int __count;
+
+        void print_vector(std::vector<double> &vec);
+
+        std::vector<double> normalise(std::vector<double> &cp);
+        std::vector<double> softmax(std::vector<double> &arg_vec);
+        double entropy(std::vector<double> &arg_vec);
+        void insert_buf(std::vector<double> &arg_vec, double &elem);
+        void constraint_buf(std::vector<double> &arg_vec);
+        void set_dataSum(double &elem);
+        double init_running_mean(double &elem);
+        double moving_avg(std::vector<double> &arg_vec, int n);
+        double naive_avg(std::vector<double> &arg_vec, int n);
+        double moving_var(vector<double> ma, int n);
+        int update_state(double sample, double old_ma, double old_sd, double alpha);
         int select_mode(int n);
+        double init_var(vector<double> ma, int n);
 
     public:
-
-        std::vector<float> entropy_buf;
-        std::vector<float> ma_buf;
-        float h0, h1, h2, h3, h4;
-        int lambda;
-        int state;
-        float data_sum;
-        float running_mean;
-        float running_sd;
-        int num_data;
-        float aggrM;
-        float aggrS;
         
         Uncertainty(int arg_lamda){
-            lambda = arg_lamda;
-            state = 0;
-            num_data = 0;
-            aggrS = 0;
+            __lambda = arg_lamda;
+
+            __state = 0;
+            __data_sum = 0;
+            __running_mean = 0;
+            __running_sd = 0;
+            __aggrM = 0;
+            __mean_of_ma = 0;
+            __count = 0;
         }
 
-        std::vector<float> wrapper(std::vector<float> class_result);
+        std::vector<double> wrapper(std::vector<float> class_result);
 
 };
 

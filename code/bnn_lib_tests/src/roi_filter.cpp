@@ -28,6 +28,9 @@ Rect Roi_filter::naive_roi(const Mat& img, unsigned int roi_size){
 
 Rect Roi_filter::basic_roi(const Mat& cur_mat, bool strict){
 
+    Rect R(Point(0,0), Point(frame_width, frame_height));
+    return R;
+
     cv::Mat grey_mat, grad_x, grad_y, abs_grad_x, abs_grad_y, sobel_mat, canny_mat;
     int scale = 1;
 	int delta = 0;
@@ -78,6 +81,13 @@ Rect Roi_filter::basic_roi(const Mat& cur_mat, bool strict){
     {
         approxPolyDP( contours[i], contours_poly[i], 3, true );
         k = i;
+    }
+
+    if (contours_poly.size() <= 0){
+        //too dark cant extract any contours
+        cout << "nth in contour poly" <<endl;
+        Rect R(Point(0,0), Point(frame_width, frame_height));
+        return R;
     }
 
     std::sort(contours_poly.begin(), contours_poly.end(), contour_sorter());
