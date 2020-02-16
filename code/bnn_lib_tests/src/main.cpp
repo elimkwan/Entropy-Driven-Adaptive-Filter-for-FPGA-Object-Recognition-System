@@ -264,7 +264,7 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 
 	myfile.open ("result.csv",std::ios_base::app);
 	//myfile << "\nFrame No., Time per frame(us), frame rate (us), Output , Adjusted Output \n";
-	myfile << "\nFrame No., Time per frame(us), frame rate (us), Output , Adjusted Output, cap_time, preprocess_time, bnn_time, window_filter_time, uncertainty_time, uncertainty_scores, ma, d_ma, ma_cross, d_area, d_out \n";
+	myfile << "\nFrame No., Time per frame(us), frame rate (us), Output , Adjusted Output, cap_time, preprocess_time, bnn_time, window_filter_time, uncertainty_time, ma, sd, state, mode\n";
 
 	//Basic Function
 
@@ -343,7 +343,7 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 	cout << "size of weight:" << w_filter.wweights.size() << endl;
 
 	//output uncertainty f1 score
-	Uncertainty u_filter(1.f,1.f,1.f,1.f,1.f,5);
+	Uncertainty u_filter(5);
 
 	//std::vector<float> past_pmf = {0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
 
@@ -405,7 +405,7 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 			class_result.push_back(outTest[j]);
 		}
 		cout << "\nclass_result" << endl;
-		print_vector(class_result);		
+		//print_vector(class_result);		
 		output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
 
 		auto t4 = chrono::high_resolution_clock::now();	//time statistics
@@ -436,7 +436,7 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 		//float uncertainty_scores, ma, d_ma, ma_cross, d_area, d_out;
 		vector<float> u;
 		std::cout << "---debug 1 ------" << endl;
-		u = u_filter.wrapper(class_result, roi.area(), output);
+		u = u_filter.wrapper(class_result);
 		
 		
 
@@ -463,7 +463,8 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 		float period = (float)overall_time/1000000;
 		float rate = 1/((float)period); //rate for processing 1 frame
 		//myfile << frame_num << "," << period << "," << rate << "," << classes[output] << "," << classes[adjusted_output] <<"\n";
-		myfile << frame_num << "," << period << "," << rate << "," << classes[output] << "," << classes[adjusted_output] << "," << cap_time << "," << preprocess_time << "," <<  bnn_time << "," << window_filter_time << "," << uncertainty_time << "," <<  u[0] << "," << u[1] << "," << u[2] << "," <<  u[3] << "," <<  u[4] << "," <<  u[5] << "\n";
+		myfile << frame_num << "," << period << "," << rate << "," << classes[output] << "," << classes[adjusted_output] << "," << cap_time << "," << preprocess_time << "," <<  bnn_time << "," << window_filter_time << "," << uncertainty_time << "," <<  u[0] << "," << u[1] << "," << u[2] << "," << u[3] << "\n";
+		//<< "," << u[1] << "," << u[2] << "," <<  u[3] << "," <<  u[4] << "," <<  u[5]
 		if (frame_num != 0){
 			total_time = total_time + period;
 		}
