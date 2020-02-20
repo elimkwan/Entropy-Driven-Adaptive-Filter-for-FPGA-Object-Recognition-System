@@ -23,8 +23,22 @@ class Uncertainty{
         double __mean_of_ma;
         int __count;
 
-        void print_vector(std::vector<double> &vec);
+        // std::vector<double> __class0_buf;
+        // std::vector<double> __class1_buf;
+        // std::vector<double> __class2_buf;
+        // std::vector<double> __class3_buf;
+        // std::vector<double> __class4_buf;
+        // std::vector<double> __class5_buf;
+        // std::vector<double> __class6_buf;
+        // std::vector<double> __class7_buf;
+        // std::vector<double> __class8_buf;
+        // std::vector<double> __class9_buf;
+        // std::vector<double> __c_dataSum;
+        // std::vector<double> __c_rolling_mean;
+        // std::vector<double> __c_rolling_sd;
 
+
+        void print_vector(std::vector<double> &vec);
         std::vector<double> normalise(std::vector<double> &cp);
         std::vector<double> softmax(std::vector<double> &arg_vec);
         double entropy(std::vector<double> &arg_vec);
@@ -34,10 +48,11 @@ class Uncertainty{
         double init_running_mean(double &elem);
         double moving_avg(std::vector<double> &arg_vec, int n);
         double naive_avg(std::vector<double> &arg_vec, int n);
-        double moving_var(vector<double> ma, int n);
-        int update_state(double sample, double old_ma, double old_sd, double alpha);
+        vector<double> moving_var(vector<double> ma, int n, double mean_of_ma, double arg_aggrM);
+        int update_state(double sample, double old_ma, double old_sd, float alpha);
         int select_mode(int n);
-        double init_var(vector<double> ma, int n);
+        vector<double> init_var(vector<double> &ma, int n);
+        double __alpha; 
 
     public:
         
@@ -51,9 +66,10 @@ class Uncertainty{
             __aggrM = 0;
             __mean_of_ma = 0;
             __count = 0;
+            __alpha = 0;
         }
 
-        std::vector<double> wrapper(std::vector<float> class_result);
+        std::vector<double> entropy_approach(std::vector<float> class_result, int mode);
 
 };
 
