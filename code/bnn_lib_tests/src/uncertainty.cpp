@@ -97,7 +97,7 @@ std::vector<double> Uncertainty::entropy_approach(std::vector<float> class_resul
     if (__alpha == 0){
         //determine alpha
         int n = rand()%(__lambda);
-        __alpha = abs(__ma_buf[__lambda]-__ma_buf[n])/__running_sd/2;
+        __alpha = abs(__ma_buf[__lambda]-__ma_buf[n])/__running_sd;
         cout<< "ALPHA SET: " << __alpha <<endl;
     }
 

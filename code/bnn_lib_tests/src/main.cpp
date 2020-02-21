@@ -347,6 +347,9 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 	Uncertainty var_filter(5);
 
 	//std::vector<float> past_pmf = {0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
+	int drop_frame_mode = 0;
+	int frames_dropped = 0;
+	unsigned int adjusted_output = 0;
 
     while(frame_num < size){
 		auto t1 = chrono::high_resolution_clock::now(); //time statistics
@@ -361,6 +364,10 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 
 		auto t2 = chrono::high_resolution_clock::now();	//time statistics
 		auto cap_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
+
+		if ( drop_frame_mode == 0 || drop_frame_mode == 1 || drop_frame_mode == 2 || (drop_frame_mode == 3 && frames_dropped == 5) || (drop_frame_mode == 4 && frames_dropped == 10)){
+		//reset frames_dropped
+		frames_dropped = 0; 
 		
 		Rect roi;
 		Rect full_frame(Point(0,0), Point(frame_width, frame_height));
@@ -414,7 +421,7 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 
         //Data post-processing:
 		w_filter.update_memory(class_result);
-		unsigned int adjusted_output = w_filter.analysis();
+		adjusted_output = w_filter.analysis();
 
 		auto t5 = chrono::high_resolution_clock::now();	//time statistics
 		auto window_filter_time = chrono::duration_cast<chrono::microseconds>( t5 - t4 ).count();
@@ -427,6 +434,7 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 		auto mode1_time = chrono::duration_cast<chrono::microseconds>( t6 - t5 ).count();
 
 		en = en_filter.entropy_approach(class_result, 2);
+		drop_frame_mode = en[4];
 
 		auto t7 = chrono::high_resolution_clock::now();	//time statistics
 		auto mode2_time = chrono::duration_cast<chrono::microseconds>( t7 - t6 ).count();
@@ -492,7 +500,16 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 			waitKey(25);	
 		}
 
-        frame_num++;
+		}
+		else {
+			frames_dropped +=1;
+
+			putText(cur_frame, classes[adjusted_output], Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));	
+			imshow("Original", cur_frame);
+			waitKey(25);
+		}
+
+		frame_num++;
     }
 
 	float accuracy = 100.0*((float)identified/(float)frame_num);
