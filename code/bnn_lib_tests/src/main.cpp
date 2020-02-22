@@ -352,162 +352,181 @@ int classify_frames(std::string in_type, unsigned int no_of_frame, unsigned int 
 	unsigned int adjusted_output = 0;
 
     while(frame_num < size){
+
 		auto t1 = chrono::high_resolution_clock::now(); //time statistics
 
-        // Data preprocessing: transform cur_frame to src then to bnn_input
-        if (in_type == "pics"){
-            cur_frame = frames[frame_num];
-        } 
-		else {
-			cap >> cur_frame;
-        }
+		Rect full_frame(Point(0,0), Point(frame_width, frame_height));
+		Rect roi =  full_frame;
 
-		auto t2 = chrono::high_resolution_clock::now();	//time statistics
-		auto cap_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
+		#pragma omp parallel sections
+		{
+			#pragma omp section
+			{
+				//auto t1 = chrono::high_resolution_clock::now(); //time statistics
+
+				// Data preprocessing: transform cur_frame to src then to bnn_input
+				if (in_type == "pics"){
+					cur_frame = frames[frame_num];
+				} 
+				else {
+					cap >> cur_frame;
+				}
+
+				//auto t2 = chrono::high_resolution_clock::now();	//time statistics
+				//auto cap_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
+			}
+
+			#pragma omp section
+			{
+				// Rect roi;
+				// Rect full_frame(Point(0,0), Point(frame_width, frame_height));
+				
+				// //testing 
+				// if (frame_num < 2){
+				// 	roi = full_frame;
+				// 	//r_filter.init_enhanced_roi(cur_frame);
+				// } else {
+				// 	//roi=r_filter.enhanced_roi(cur_frame);
+				if (frame_num > 1){
+					roi = r_filter.basic_roi(cur_frame, false);
+				}
+
+				//if not given frame size = 0 return full frame
+				//if given frame size crop the center 128*128 out
+				src = cur_frame(roi);
+
+				//Resizing frame for bnn
+				//cv::resize(src, bnn_input, cv::Size(frame_size, frame_size), 0, 0, cv::INTER_CUBIC );
+				cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );			
+				flatten_mat(reduced_sized_frame, bgr);
+				vec_t img;
+				std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+				quantiseAndPack<8, 1>(img, &packedImages[0], psi);
+			
+				//auto t3 = chrono::high_resolution_clock::now();	//time statistics
+				//auto preprocess_time = chrono::duration_cast<chrono::microseconds>( t3 - t2 ).count();
+			}
+		}
+
+		auto t3 = chrono::high_resolution_clock::now();	//time statistics
+		auto preprocess_time = chrono::duration_cast<chrono::microseconds>( t3 - t1 ).count();
+		auto cap_time = preprocess_time;
+
 
 		if ( drop_frame_mode == 0 || drop_frame_mode == 1 || drop_frame_mode == 2 || (drop_frame_mode == 3 && frames_dropped == 5) || (drop_frame_mode == 4 && frames_dropped == 10)){
 		//reset frames_dropped
-		frames_dropped = 0; 
+			frames_dropped = 0; 
+
+			// Call the hardware function
+			kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,1,0);
+			if (frame_num != 1)
+			{
+				kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,0,1);
+			}
+			// Extract the output of BNN and classify result
+			std::vector<float> class_result;
+			copyFromLowPrecBuffer<unsigned short>(&packedOut[0], outTest);
+			// cout << "\npackedOut" << endl;
+			// print_vector(&packedOut);
+			// cout << "\noutTest" << endl;
+			// print_vector(outTest);
+			for(unsigned int j = 0; j < number_class; j++) {			
+				class_result.push_back(outTest[j]);
+			}
+			//cout << "\nclass_result" << endl;
+			//print_vector(class_result);		
+			output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
+
+			auto t4 = chrono::high_resolution_clock::now();	//time statistics
+			auto bnn_time = chrono::duration_cast<chrono::microseconds>( t4 - t3 ).count();
+
+			//Data post-processing:
+			w_filter.update_memory(class_result);
+			adjusted_output = w_filter.analysis();
+
+			auto t5 = chrono::high_resolution_clock::now();	//time statistics
+			auto window_filter_time = chrono::duration_cast<chrono::microseconds>( t5 - t4 ).count();
+
+			vector<double> en, v;
+			std::cout << "---debug 1 ------" << endl;
+			v = var_filter.entropy_approach(class_result, 1);
+
+			auto t6 = chrono::high_resolution_clock::now();	//time statistics
+			auto mode1_time = chrono::duration_cast<chrono::microseconds>( t6 - t5 ).count();
+
+			en = en_filter.entropy_approach(class_result, 2);
+			drop_frame_mode = en[4];
+
+			auto t7 = chrono::high_resolution_clock::now();	//time statistics
+			auto mode2_time = chrono::duration_cast<chrono::microseconds>( t7 - t6 ).count();
+			
+			
+
+			std::cout << "-------------------------------------------------"<< endl;
+			std::cout << "frame num: " << frame_num << endl;
+			std::cout << "raw output: " << classes[output] << endl;
+			std::cout << "adjusted output: " << classes[adjusted_output] << endl;
+			std::cout << "-------------------------------------------------"<< endl;
+
+			cout <<"expected" << expected_class <<" " << adjusted_output <<endl;
+			if (int(expected_class) == int(output)){
+				//cout << "debug" <<endl;
+				identified ++;
+			}
+			if (int(expected_class) == int(adjusted_output)){
+				//cout << "debug 2" <<endl;
+				identified_adj++;
+			}
+
+			auto overall_time = chrono::duration_cast<chrono::microseconds>( t7 - t1 ).count();
+			float period = (float)overall_time/1000000;
+			float rate = 1/((float)period); //rate for processing 1 frame
+			//myfile << frame_num << "," << period << "," << rate << "," << classes[output] << "," << classes[adjusted_output] <<"\n";
+			myfile << frame_num << "," << period << "," << rate << "," << classes[output] << "," << classes[adjusted_output] << "," << cap_time << "," << preprocess_time << "," <<  bnn_time << "," << window_filter_time << "," << mode2_time << "," <<  en[0] << "," << en[1] << "," << en[2] << "," << en[3] << "," << en[4] << "," << mode1_time << "," <<  v[0] << "," << v[1] << "," << v[2] << "," << v[3] << "," << v[4] << "\n";
+			//<< "," << u[1] << "," << u[2] << "," <<  u[3] << "," <<  u[4] << "," <<  u[5]
+			if (frame_num != 0){
+				total_time = total_time + period;
+			}
+
+			//draw the naive roi on curframe
+			// if (frame_size != 0)
+			// {			
+			// 	rectangle(cur_frame, Point((frame_width/2)-(frame_size/2), (frame_height/2)-(frame_size/2)), Point((frame_width/2)+(frame_size/2), (frame_height/2)+(frame_size/2)), Scalar(0, 0, 255)); // draw a 32x32 box at the centre
+			// } else {
+			// 	rectangle(cur_frame, roi, Scalar(0, 0, 255));
+			// }
+
+			rectangle(cur_frame, roi, Scalar(0, 0, 255));
+
+			// if (optical_mask.empty() != true){
+			// 	//add(stored_mat, mask, pic);
+			// 	cur_frame.copyTo(cur_frame, optical_mask);
+			// 	cout << "mask is empty" << endl;
+			// } else {
+			// 	cout << "mask is not empty, can you see it?" << endl;
+			// }
 		
-		Rect roi;
-		Rect full_frame(Point(0,0), Point(frame_width, frame_height));
-		
-		//testing 
-		if (frame_num < 2){
-			roi = full_frame;
-			//r_filter.init_enhanced_roi(cur_frame);
-		} else {
-			//roi=r_filter.enhanced_roi(cur_frame);
-			roi = r_filter.basic_roi(cur_frame, false);
-		}
-
-		//if not given frame size = 0 return full frame
-		//if given frame size crop the center 128*128 out
-        src = cur_frame(roi);
-
-        //Resizing frame for bnn
-        //cv::resize(src, bnn_input, cv::Size(frame_size, frame_size), 0, 0, cv::INTER_CUBIC );
-        cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );			
-        flatten_mat(reduced_sized_frame, bgr);
-        vec_t img;
-        std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-        quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-	
-		auto t3 = chrono::high_resolution_clock::now();	//time statistics
-		auto preprocess_time = chrono::duration_cast<chrono::microseconds>( t3 - t2 ).count();
-
-        // Call the hardware function
-		kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,1,0);
-		if (frame_num != 1)
-		{
-			kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,0,1);
-		}
-		// Extract the output of BNN and classify result
-		std::vector<float> class_result;
-		copyFromLowPrecBuffer<unsigned short>(&packedOut[0], outTest);
-		// cout << "\npackedOut" << endl;
-		// print_vector(&packedOut);
-		// cout << "\noutTest" << endl;
-		// print_vector(outTest);
-		for(unsigned int j = 0; j < number_class; j++) {			
-			class_result.push_back(outTest[j]);
-		}
-		//cout << "\nclass_result" << endl;
-		//print_vector(class_result);		
-		output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
-
-		auto t4 = chrono::high_resolution_clock::now();	//time statistics
-		auto bnn_time = chrono::duration_cast<chrono::microseconds>( t4 - t3 ).count();
-
-        //Data post-processing:
-		w_filter.update_memory(class_result);
-		adjusted_output = w_filter.analysis();
-
-		auto t5 = chrono::high_resolution_clock::now();	//time statistics
-		auto window_filter_time = chrono::duration_cast<chrono::microseconds>( t5 - t4 ).count();
-
-		vector<double> en, v;
-		std::cout << "---debug 1 ------" << endl;
-		v = var_filter.entropy_approach(class_result, 1);
-
-		auto t6 = chrono::high_resolution_clock::now();	//time statistics
-		auto mode1_time = chrono::duration_cast<chrono::microseconds>( t6 - t5 ).count();
-
-		en = en_filter.entropy_approach(class_result, 2);
-		drop_frame_mode = en[4];
-
-		auto t7 = chrono::high_resolution_clock::now();	//time statistics
-		auto mode2_time = chrono::duration_cast<chrono::microseconds>( t7 - t6 ).count();
-		
-		
-
-		std::cout << "-------------------------------------------------"<< endl;
-		std::cout << "frame num: " << frame_num << endl;
-		std::cout << "raw output: " << classes[output] << endl;
-		std::cout << "adjusted output: " << classes[adjusted_output] << endl;
-		std::cout << "-------------------------------------------------"<< endl;
-
-		cout <<"expected" << expected_class <<" " << adjusted_output <<endl;
-		if (int(expected_class) == int(output)){
-			//cout << "debug" <<endl;
-			identified ++;
-		}
-		if (int(expected_class) == int(adjusted_output)){
-			//cout << "debug 2" <<endl;
-			identified_adj++;
-		}
-
-		auto overall_time = chrono::duration_cast<chrono::microseconds>( t7 - t1 ).count();
-		float period = (float)overall_time/1000000;
-		float rate = 1/((float)period); //rate for processing 1 frame
-		//myfile << frame_num << "," << period << "," << rate << "," << classes[output] << "," << classes[adjusted_output] <<"\n";
-		myfile << frame_num << "," << period << "," << rate << "," << classes[output] << "," << classes[adjusted_output] << "," << cap_time << "," << preprocess_time << "," <<  bnn_time << "," << window_filter_time << "," << mode2_time << "," <<  en[0] << "," << en[1] << "," << en[2] << "," << en[3] << "," << en[4] << "," << mode1_time << "," <<  v[0] << "," << v[1] << "," << v[2] << "," << v[3] << "," << v[4] << "\n";
-		//<< "," << u[1] << "," << u[2] << "," <<  u[3] << "," <<  u[4] << "," <<  u[5]
-		if (frame_num != 0){
-			total_time = total_time + period;
-		}
-
-		//draw the naive roi on curframe
-		// if (frame_size != 0)
-		// {			
-		// 	rectangle(cur_frame, Point((frame_width/2)-(frame_size/2), (frame_height/2)-(frame_size/2)), Point((frame_width/2)+(frame_size/2), (frame_height/2)+(frame_size/2)), Scalar(0, 0, 255)); // draw a 32x32 box at the centre
-		// } else {
-		// 	rectangle(cur_frame, roi, Scalar(0, 0, 255));
-		// }
-
-		rectangle(cur_frame, roi, Scalar(0, 0, 255));
-
-		// if (optical_mask.empty() != true){
-		// 	//add(stored_mat, mask, pic);
-		// 	cur_frame.copyTo(cur_frame, optical_mask);
-		// 	cout << "mask is empty" << endl;
-		// } else {
-		// 	cout << "mask is not empty, can you see it?" << endl;
-		// }
-	
-		//Display output
-		if (in_type == "pics"){
-			//imshow("Original", cur_frame);
-			vector<int> compression_params;
-			compression_params.push_back( CV_IMWRITE_JPEG_QUALITY );
-			compression_params.push_back( 100 );
-			std::string img_path = "../experiments/results/" + classes[output] + ".jpg";
-			imwrite(img_path,cur_frame, compression_params);
-			//waitKey(0);
-		} else {
-			putText(cur_frame, classes[adjusted_output], Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));	
-			imshow("Original", cur_frame);
-			waitKey(25);	
-		}
+			//Display output
+			// if (in_type == "pics"){
+			// 	//imshow("Original", cur_frame);
+			// 	vector<int> compression_params;
+			// 	compression_params.push_back( CV_IMWRITE_JPEG_QUALITY );
+			// 	compression_params.push_back( 100 );
+			// 	std::string img_path = "../experiments/results/" + classes[output] + ".jpg";
+			// 	imwrite(img_path,cur_frame, compression_params);
+			// 	//waitKey(0);
+			// } 
 
 		}
 		else {
 			frames_dropped +=1;
 
-			putText(cur_frame, classes[adjusted_output], Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));	
-			imshow("Original", cur_frame);
-			waitKey(25);
 		}
+
+		//Display output
+		putText(cur_frame, classes[adjusted_output], Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));	
+		imshow("Original", cur_frame);
+		waitKey(25);
 
 		frame_num++;
     }
