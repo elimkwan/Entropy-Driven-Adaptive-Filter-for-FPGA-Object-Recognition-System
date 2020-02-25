@@ -11,6 +11,17 @@ struct contour_sorter {
     }
 };
 
+//helper func: for printing vector
+void Roi_filter::print_vector(std::vector<Point> &vec)
+{
+	std::cout << "{ ";
+	for(auto const &elem : vec)
+	{
+		std::cout << elem << " ";
+	}
+	std::cout << "}" <<endl;
+}
+
 Rect Roi_filter::naive_roi(const Mat& img, unsigned int roi_size){
     if (roi_size == 0){
         //return img
@@ -25,11 +36,30 @@ Rect Roi_filter::naive_roi(const Mat& img, unsigned int roi_size){
     }
 }
 
+Rect Roi_filter::get_past_roi(){
+    return past_roi;
+}
 
-Rect Roi_filter::basic_roi(const Mat& cur_mat, bool strict){
+void Roi_filter::store_prev_img(const Mat& mat){
+    prev_img = mat;
+}
 
-    Rect R(Point(0,0), Point(frame_width, frame_height));
-    return R;
+void Roi_filter::bitwise_and_roi(const Mat& mat){
+    cv::Mat img_fg;
+    cv::bitwise_and(mat,prev_img,img_fg);
+    store_prev_img(mat);
+
+    imshow("bitwise_and", img_fg);
+    waitKey(0);
+}
+
+
+Rect Roi_filter::basic_roi(const Mat& mat, bool strict){
+
+    // Rect R(Point(0,0), Point(frame_width, frame_height));
+    // return R;
+
+    cv::Mat cur = mat.clone();
 
     cv::Mat grey_mat, grad_x, grad_y, abs_grad_x, abs_grad_y, sobel_mat, canny_mat;
     int scale = 1;
@@ -37,7 +67,7 @@ Rect Roi_filter::basic_roi(const Mat& cur_mat, bool strict){
 	int ddepth = CV_16S;
 
     //Convert img to grey scale
-    cv::cvtColor(cur_mat, grey_mat, CV_BGR2GRAY);
+    cv::cvtColor(mat, grey_mat, CV_BGR2GRAY);
 
     //Blur img
     GaussianBlur(grey_mat, grey_mat, Size(3,3), 0, 0, BORDER_DEFAULT );
@@ -55,71 +85,96 @@ Rect Roi_filter::basic_roi(const Mat& cur_mat, bool strict){
     int thresh = 100;
     Canny( sobel_mat, canny_mat, thresh, thresh*2);
 
+    // imshow("Canny", canny_mat);
+	// waitKey(0);
+
     //Group contour
     double max_area = 0;
     vector<vector<Point> > contours;
+    //cout << "---debug opencv 1 --" << endl;
     findContours(canny_mat, contours, CV_RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
-
-    // imshow("Sobel Mat", sobel_mat);
-    // waitKey(0);
-    // imshow("Canny Mat", canny_mat);
-    // waitKey(0);
-    
+    //cout << "---debug opencv 2 --" << endl;
     if (contours.size() <= 0){
+        cout << "---debug opencv 3--" << endl;
         //too dark cant extract any contours
         Rect R(Point(0,0), Point(frame_width, frame_height));
+        past_roi = R;
         return R;
     }
+    //cout << "---debug opencv 4 --" << endl;
 
     vector<vector<Point> > contours_poly(contours.size());
     Rect boundRect;
 
-    int k = 0;
+    //int k = 0;
+    //cout << "---debug opencv 5 --" << endl;
 
     for( size_t i = 0; i < contours.size(); i++ )
     {
         approxPolyDP( contours[i], contours_poly[i], 3, true );
-        k = i;
+        //cout << "---debug opencv 6 --" << endl;
     }
-
+    //cout << "---debug opencv 7 --" << endl;
     if (contours_poly.size() <= 0){
         //too dark cant extract any contours
-        cout << "nth in contour poly" <<endl;
+        //cout << "---debug opencv 8 --" << endl;
+        //cout << "nth in contour poly" <<endl;
         Rect R(Point(0,0), Point(frame_width, frame_height));
+        past_roi = R;
         return R;
     }
 
-    std::sort(contours_poly.begin(), contours_poly.end(), contour_sorter());
+    //cout << "---debug opencv 9 --" << endl;
+
+    //std::sort(contours_poly.begin(), contours_poly.end(), contour_sorter());
+
+    //cout << "---debug opencv 10 --" << endl;
+
+    int k = contours_poly.size();
+    //cout << "size of contour poly: " << k << endl;
     
-    Rect max_r = boundingRect(contours_poly[k]);
-
-    //used when using enhanced roi
-    if (strict){
-        return max_r;
-    }
-
-    double m = contourArea(contours_poly[k]);
+    Rect max_r = boundingRect(contours_poly[k-1]);
 
     int x1,y1,x2,y2;
     x1 = max_r.x;
     y1 = max_r.y;
     x2 = max_r.x + max_r.width;
     y2 = max_r.y + max_r.height;
-    for(size_t i = k-2 ; i > 0; i--){
-        double a = contourArea(contours_poly[i]);
-        //cout << "sorting contours x3" <<endl;
-        if (a > (m/2)){
-            Rect r1 = boundingRect(contours_poly[i]);
-            x1 = min(x1,r1.x);
-            y1 = min(y1,r1.y);
-            x2 = max(x2,r1.x + r1.width);
-            y2 = max(y2,r1.y + r1.height);
+    cout << "size of contours poly: " << k << endl;
+    if (k > 1){
+        for(size_t i = 0 ; i < k - 2 ; i++){
+        if (contours_poly[i].size() > 1){
+            double a = contourArea(contours_poly[i]);
+            if (a > 10){
+                //cout << "area of rect: " << a <<endl;
+                //print_vector(contours_poly[i]);
+
+                Rect r1 = boundingRect(contours_poly[i]);
+
+                x1 = min(x1,r1.x);
+                y1 = min(y1,r1.y);
+                x2 = max(x2,r1.x + r1.width);
+                y2 = max(y2,r1.y + r1.height);
+
+                // rectangle(cur, r1, Scalar(0, 255, 255));
+                // imshow("small roi", cur);
+                // waitKey(0);
+
+            }
         }
     }
+    }
+    //cout << "---debug opencv 13 --" << endl;
 
-    Rect wrapper = expand_r(x1,y1,x2,y2,0.1);
+    // Rect small_roi(Point(x1,y1), Point(x2,y2));
+    // rectangle(cur, small_roi, Scalar(0, 0, 255));
+    // imshow("small roi", cur);
+    // waitKey(0);
 
+    Rect wrapper = expand_r(x1*4,y1*4,x2*4,y2*4,0.1);
+
+    past_roi = wrapper;
     return wrapper;
 
 }

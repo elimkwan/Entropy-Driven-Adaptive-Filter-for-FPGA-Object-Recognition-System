@@ -1,6 +1,6 @@
 #include "uncertainty.hpp"
 
-std::vector<double> Uncertainty::entropy_approach(std::vector<float> class_result, int mode){
+std::vector<double> Uncertainty::cal_uncertainty(std::vector<float> class_result, string mode){
     //mode 1: varience; mode 2:entropy
 
     std::vector<double> input_v(class_result.begin(), class_result.end());
@@ -12,10 +12,10 @@ std::vector<double> Uncertainty::entropy_approach(std::vector<float> class_resul
     double distribution; // varience or entropy of the input
     std::vector<double> pmf = softmax(input_v);
 
-    if (mode == 1){
+    if (mode == "var"){
         distribution = init_var(pmf, 10)[2];
     }
-    else if (mode == 2){
+    else if (mode == "en"){
         distribution = entropy(pmf);
     }
 
@@ -28,7 +28,7 @@ std::vector<double> Uncertainty::entropy_approach(std::vector<float> class_resul
     int en_s = __entropy_buf.size();
 
     if (en_s < __lambda){
-        cout << "----------initialising stage 1---------" << endl;
+        //cout << "----------initialising stage 1---------" << endl;
         set_dataSum(distribution);
 
         //print_vector(__entropy_buf);
@@ -38,7 +38,7 @@ std::vector<double> Uncertainty::entropy_approach(std::vector<float> class_resul
     }
     
     if (en_s == __lambda && __state == 0){
-        cout << "----------initialising stage 2---------" << endl;
+        //cout << "----------initialising stage 2---------" << endl;
         ma = init_running_mean(distribution);
         insert_buf(__ma_buf, ma);
 
@@ -47,20 +47,23 @@ std::vector<double> Uncertainty::entropy_approach(std::vector<float> class_resul
         return {distribution, ma, 0, 0, 1};
     }
 
-    if (__count < 50){
-        ma = moving_avg(__entropy_buf,__lambda);
-        __count += 1;
-    } else{
-        ma = naive_avg(__entropy_buf,__lambda);
-        __count == 0;
-    }
+    ma = moving_avg(__entropy_buf,__lambda);
+
+    //refresh ma
+    // if (__count < 50){
+    //     ma = moving_avg(__entropy_buf,__lambda);
+    //     __count += 1;
+    // } else{
+    //     ma = naive_avg(__entropy_buf,__lambda);
+    //     __count == 0;
+    // }
 
     insert_buf(__ma_buf, ma);
     int ma_s = __ma_buf.size();
 
     
     if (ma_s < __lambda){
-        cout << "----------initialising stage 3---------" << endl;
+        //cout << "----------initialising stage 3---------" << endl;
         constraint_buf(__entropy_buf);
 
         //print_vector(__entropy_buf);
@@ -69,7 +72,7 @@ std::vector<double> Uncertainty::entropy_approach(std::vector<float> class_resul
     }
 
     if (ma_s == __lambda){
-        cout << "----------initialising stage 4---------" << endl;
+        //cout << "----------initialising stage 4---------" << endl;
         vector <double> r;
         
         r = init_var(__ma_buf, __lambda);
@@ -85,7 +88,7 @@ std::vector<double> Uncertainty::entropy_approach(std::vector<float> class_resul
     }
 
 
-    cout << "----------initialising stage 5(main loop)---------" << endl;
+    //cout << "----------initialising stage 5(main loop)---------" << endl;
 
     vector<double> a = moving_var(__ma_buf, __lambda, __mean_of_ma, __aggrM);
     __mean_of_ma = a[0];
@@ -184,7 +187,7 @@ double Uncertainty::naive_avg(std::vector<double> &arg_vec, int n){
 }
 
 vector<double> Uncertainty::init_var(vector<double> &ma, int n){
-    cout<<"slow computation"<<endl;
+    //cout<<"slow computation"<<endl;
     double m = 0;
     for(auto const &elem : ma){
         //sum += pow((elem-mean),2);
@@ -205,8 +208,8 @@ vector<double> Uncertainty::init_var(vector<double> &ma, int n){
 vector<double> Uncertainty::moving_var(vector<double> ma, int n, double mean_of_ma, double arg_aggrM){
 
     //using welfard method
-    cout<<"faster computation moving var"<<endl;
-    cout<<"mean of ma" << mean_of_ma <<endl;
+    //cout<<"faster computation moving var"<<endl;
+    //cout<<"mean of ma" << mean_of_ma <<endl;
     //print_vector(ma);
 
     double old_mean = mean_of_ma;
@@ -233,7 +236,7 @@ int Uncertainty::update_state(double sample, double old_ma, double old_sd, float
 }
 
 int Uncertainty::select_mode(int n){
-    if (__state <= n){
+    if (__state <= 1){
         return 1;
     }else if (__state <= (2*n + 1) ){
         return 2;

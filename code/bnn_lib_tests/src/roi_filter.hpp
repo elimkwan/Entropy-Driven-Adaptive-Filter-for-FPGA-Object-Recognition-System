@@ -15,6 +15,7 @@ using namespace std;
 class Roi_filter{
     private:
     Rect expand_r(int x1, int y1, int x2, int y2, float p);
+    Rect past_roi;
 
     cv::Mat contour_map();
     cv::Mat dense_optical_flow(const Mat& contour_mat);
@@ -22,6 +23,7 @@ class Roi_filter{
     Rect colour_seg(const Mat& cur, int low_thres, int up_thres);
     void update_enhanced_roi_param (const Mat& motion_mat);
     cv::Mat simple_optical_flow();
+    void print_vector(std::vector<Point> &vec);
     
 
     public:
@@ -29,7 +31,7 @@ class Roi_filter{
         int frame_width;
         int frame_height;
         cv::Mat cur_mat, cur_mat_grey, prev_mat, prev_mat_grey, mask1, mask2, mask3;
-
+        cv::Mat prev_img;
         //cv::Mat stored_mat;
         //cv::Mat stored_grey_mat;
         //vector<Point2f> stored_p0;
@@ -37,12 +39,16 @@ class Roi_filter{
         Roi_filter(int w,int h){
             frame_width = w;
             frame_height = h;
+            past_roi = Rect(Point(0,0), Point(w, h));
         }
 
         Rect naive_roi(const Mat& img, unsigned int roi_size);
         Rect basic_roi(const Mat& img, bool strict);
         void init_enhanced_roi(const Mat& img);
         Rect enhanced_roi (const Mat& img);
+        Rect get_past_roi();
+        void store_prev_img(const Mat& mat);
+        void bitwise_and_roi(const Mat& mat);
     
 };
 

@@ -69,7 +69,7 @@ class Uncertainty{
             __alpha = 0;
         }
 
-        std::vector<double> entropy_approach(std::vector<float> class_result, int mode);
+        std::vector<double> cal_uncertainty(std::vector<float> class_result, string mode);
 
 };
 

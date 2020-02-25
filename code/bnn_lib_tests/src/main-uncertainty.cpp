@@ -248,13 +248,7 @@ extern "C" void deinit() {
 /*
 	Command avaliable:
 	./BNN 500 en notdrop notflexw fullroi 4 <-for testing various uncertainty scheme
-	./BNN 500 var notdrop notflexw fullroi 4
-	./BNN 500 en notdrop notflexw fullroi 4
-	./BNN 500 en drop notflexw fullroi 4
-	./BNN 500 en drop flexw fullroi 4
-	./BNN 500 en drop flexw flexroi 4
-	./BNN 500 en drop flexw effroi 4
-	
+	./BNN 1000 en drop flexw effroi 4
 
 */
 int main(int argc, char** argv)
@@ -434,6 +428,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 		auto var_time = temp;
 
 		vector<double> u(5, 0.0);
+		vector<double> v(5, 0.0);
 
 		#pragma omp parallel sections
 		{
@@ -539,6 +534,13 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 			//Data post-processing:
 			//calculate uncertainty
 			u = u_filter.cal_uncertainty(class_result,uncertainty_config);
+			auto t61 = chrono::high_resolution_clock::now();	//time statistics
+			en_time = chrono::duration_cast<chrono::microseconds>( t61 - t6 ).count();
+
+			v = var_filter.cal_uncertainty(class_result,"var");
+			auto t62 = chrono::high_resolution_clock::now();	//time statistics
+			var_time = chrono::duration_cast<chrono::microseconds>( t62 - t61 ).count();
+
 			drop_frame_mode = u[4];
 
 			auto t7 = chrono::high_resolution_clock::now();	//time statistics
@@ -581,7 +583,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 			u_mode = "";
 		}
 
-		myfile << frame_num << "," << cam_fps << "," << total_fps << "," << period << "," << classes[output] << "," << classes[adjusted_output] << "," << cap_time << "," << preprocessing_time << "," << parallel_time << "," <<  bnn_time << "," << wfilter_time << "," << uncertainty_time << "," <<  u_stats << "," << u[1] << "," << u[2] << "," << u[3] << "," << drop_frame_mode << "\n";
+		myfile << frame_num << "," << cam_fps << "," << total_fps << "," << period << "," << classes[output] << "," << classes[adjusted_output] << "," << cap_time << "," << preprocessing_time << "," << parallel_time << "," <<  bnn_time << "," << wfilter_time << "," << en_time << "," <<  u_stats << "," << u[1] << "," << u[2] << "," << u[3] << "," << drop_frame_mode << "," << v[0] << "," << v[1] << "," << v[2] << "," << v[3] << "," << v[4] << "," << var_time<< "\n";
 		if (frame_num != 0){
 			total_time = total_time + period;
 			total_cap_time = total_cap_time + (float)cap_time/1000000;
