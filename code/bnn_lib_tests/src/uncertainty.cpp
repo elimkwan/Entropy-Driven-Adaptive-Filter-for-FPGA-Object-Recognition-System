@@ -1,7 +1,102 @@
 #include "uncertainty.hpp"
+void Uncertainty::init_corr_history(std::vector<double> &arg_vec){
+    std::vector <double> emptyrol (1, 0.0);
+    for(int i=0; i<10; i++)
+    {
+        __corr_history.push_back(emptyrol);
+    }
+}
 
-std::vector<double> Uncertainty::cal_uncertainty(std::vector<float> class_result, string mode){
-    //mode 1: varience; mode 2:entropy
+void Uncertainty::insert_corr_history(std::vector<double> &arg_vec){
+    int s = arg_vec.size();
+    for (int i = 0 ; i < s ; i++){
+        __corr_history[i].insert(__corr_history[i].begin(), arg_vec[i]);
+    }
+
+//     for(int i=0; i<10; i++)
+//     {
+//         print_vector(__corr_history[i]);
+//     }
+    }
+
+void Uncertainty::constraint_corr_history(){
+    for (int i = 0 ; i < 10; i++){
+        if (__corr_history[i].size() > 4){
+            __corr_history[i].pop_back();
+        }
+    }
+}
+
+double Uncertainty::running_auto_correlation(std::vector<double> &arg_vec, int result){
+    
+    double new_correlation = __running_corr[result] + arg_vec[0]*arg_vec[1] - arg_vec[4]*arg_vec[3];
+    return new_correlation;
+}
+
+double Uncertainty::init_auto_correlation(std::vector<double> &arg_vec){
+    double sum = 0;
+    print_vector(arg_vec);
+    int s = arg_vec.size();
+    for (int i = 0 ; i < s-1 ; i++){
+        cout << "debug-loop" <<endl;
+        sum += arg_vec[i]*arg_vec[i+1];
+    }
+    return (sum/s);
+}
+
+double Uncertainty::auto_corr_wrapper(std::vector<double> &arg_vec, int result){
+    if (__corr_history.empty()){
+        cout << "debug01" <<endl;
+        init_corr_history(arg_vec);
+        cout << "debug02" <<endl;
+        //return {-1, -1, -1, __state, 0};
+        return -1.0;
+    }
+
+    insert_corr_history(arg_vec);
+    cout << "debug1" <<endl;
+    int s = __corr_history[0].size();
+    cout << "debug2" <<endl;
+
+    if (s < 4){
+        cout << "debug3" <<endl;
+        //return {-1, -1, -1, __state, 0};
+        return -1.0;
+    }
+
+    if (s == 4){
+        cout << "debug4" <<endl;
+        //print_vector(__running_corr);
+        for (int i = 9; i > -1; i--){
+            __running_corr.push_back (init_auto_correlation(__corr_history[i]) );
+        }
+        //return {-1, -1, -1, __state, 0};
+        return -1.0;
+    }
+    cout << "debug5" <<endl;
+    double past_corr = __running_corr[result];
+    cout << "debug6" <<endl;
+    for (int i = 0; i < 10; i++){
+        __running_corr[i] = running_auto_correlation(__corr_history[i], i);
+    }
+    cout << "debug7" <<endl;
+
+    //mode selection
+    // if (__running_corr[result] < past_corr){
+    //     __state = 1;
+    // } else if (__state < 18){
+    //     __state += 0;
+    // }
+    // int cur_mode = select_mode(3);
+    // constraint_corr_history();
+
+    // return {__running_corr[result], -1, -1, __state, cur_mode};
+
+    return __running_corr[result];
+}
+
+std::vector<double> Uncertainty::cal_uncertainty(std::vector<float> class_result, string mode, int result){
+    //mode 1: varience; mode 2:entropy; mode 3: correlation
 
     std::vector<double> input_v(class_result.begin(), class_result.end());
     double ma = 0;
@@ -17,6 +112,9 @@ std::vector<double> Uncertainty::cal_uncertainty(std::vector<float> class_result
     }
     else if (mode == "en"){
         distribution = entropy(pmf);
+    } else if (mode == "a"){
+        //return auto_corr_wrapper(pmf, result);
+        distribution = auto_corr_wrapper(pmf, result);
     }
 
     if (std::isnan(distribution)){

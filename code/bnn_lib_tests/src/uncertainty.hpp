@@ -22,6 +22,9 @@ class Uncertainty{
         double __aggrM;
         double __mean_of_ma;
         int __count;
+        double __alpha; 
+        std::vector<std::vector<double>> __corr_history;
+        std::vector<double> __running_corr;
 
         // std::vector<double> __class0_buf;
         // std::vector<double> __class1_buf;
@@ -52,7 +55,13 @@ class Uncertainty{
         int update_state(double sample, double old_ma, double old_sd, float alpha);
         int select_mode(int n);
         vector<double> init_var(vector<double> &ma, int n);
-        double __alpha; 
+
+        void init_corr_history(std::vector<double> &arg_vec);
+        void insert_corr_history(std::vector<double> &arg_vec);
+        void constraint_corr_history();
+        double running_auto_correlation(std::vector<double> &arg_vec, int result);
+        double init_auto_correlation(std::vector<double> &arg_vec);
+        double auto_corr_wrapper(std::vector<double> &arg_vec, int result);
 
     public:
         
@@ -69,7 +78,7 @@ class Uncertainty{
             __alpha = 0;
         }
 
-        std::vector<double> cal_uncertainty(std::vector<float> class_result, string mode);
+        std::vector<double> cal_uncertainty(std::vector<float> class_result, string mode, int result);
 
 };
 

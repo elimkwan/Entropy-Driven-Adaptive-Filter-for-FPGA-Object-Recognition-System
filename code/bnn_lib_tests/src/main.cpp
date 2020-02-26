@@ -400,7 +400,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 	//cout << "size of weight:" << w_filter.wweights.size() << endl;
 
 	Uncertainty u_filter(5);
-	Uncertainty var_filter(5);//testing various uncertainty scheme
+	//Uncertainty var_filter(5);//testing various uncertainty scheme
 
 	int drop_frame_mode = 0;
 	int frames_dropped = 0;
@@ -538,7 +538,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 
 			//Data post-processing:
 			//calculate uncertainty
-			u = u_filter.cal_uncertainty(class_result,uncertainty_config);
+			u = u_filter.cal_uncertainty(class_result,uncertainty_config, output);
 			drop_frame_mode = u[4];
 
 			auto t7 = chrono::high_resolution_clock::now();	//time statistics
