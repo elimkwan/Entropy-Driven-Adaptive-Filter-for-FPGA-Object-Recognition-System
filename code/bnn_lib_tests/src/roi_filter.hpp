@@ -17,24 +17,23 @@ class Roi_filter{
     Rect expand_r(int x1, int y1, int x2, int y2, float p);
     Rect past_roi;
 
-    cv::Mat contour_map();
-    cv::Mat dense_optical_flow(const Mat& contour_mat);
-    cv::Mat weighted_map(const Mat& cur_mat);
+    cv::Mat hsv_motion_mat;
+    Rect small_bounding_r;
+
+
     Rect colour_seg(const Mat& cur, int low_thres, int up_thres);
-    void update_enhanced_roi_param (const Mat& motion_mat);
     cv::Mat simple_optical_flow();
     void print_vector(std::vector<Point> &vec);
+    int colour_similarity(Rect r, const Mat& a, int n);
+    std::vector<float> normalise(std::vector<float> &cp);
+    float entropy(std::vector<float> &arg_vec);
     
 
     public:
 
         int frame_width;
         int frame_height;
-        cv::Mat cur_mat, cur_mat_grey, prev_mat, prev_mat_grey, mask1, mask2, mask3;
-        cv::Mat prev_img;
-        //cv::Mat stored_mat;
-        //cv::Mat stored_grey_mat;
-        //vector<Point2f> stored_p0;
+        cv::Mat cur_mat, cur_mat_grey, prev_mat, prev_mat_grey;
 
         Roi_filter(int w,int h){
             frame_width = w;
@@ -43,12 +42,12 @@ class Roi_filter{
         }
 
         Rect naive_roi(const Mat& img, unsigned int roi_size);
-        Rect basic_roi(const Mat& img, bool strict);
+        Rect basic_roi(const Mat& img);
         void init_enhanced_roi(const Mat& img);
         Rect enhanced_roi (const Mat& img);
         Rect get_past_roi();
-        void store_prev_img(const Mat& mat);
-        void bitwise_and_roi(const Mat& mat);
+        Rect get_full_roi();
+        //void update_enhanced_roi_param(const Mat& img);
     
 };
 

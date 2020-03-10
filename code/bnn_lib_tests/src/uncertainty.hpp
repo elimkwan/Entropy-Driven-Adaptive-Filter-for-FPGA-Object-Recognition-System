@@ -52,7 +52,7 @@ class Uncertainty{
         double moving_avg(std::vector<double> &arg_vec, int n);
         double naive_avg(std::vector<double> &arg_vec, int n);
         vector<double> moving_var(vector<double> ma, int n, double mean_of_ma, double arg_aggrM);
-        int update_state(double sample, double old_ma, double old_sd, float alpha);
+        int update_state(double sample, double old_ma, double old_sd, float alpha, int n);
         int select_mode(int n);
         vector<double> init_var(vector<double> &ma, int n);
 

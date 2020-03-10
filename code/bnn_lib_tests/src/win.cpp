@@ -12,11 +12,11 @@ void Win_filter::print_vector(std::vector<float> &vec)
 }
 
 vector<int> Win_filter::select_ws_wl(int mode){
-	if (mode == 0 || mode == 1){
+	if (mode == 0 || mode == 1 || mode == 2){
 		return {4,12};
-	} else if (mode == 2 || mode == 3){
+	} else if (mode == 3 || mode == 4){
 		return {8,12};
-	} else if (mode == 4) {
+	} else if (mode == 5) {
 		return {10, 12};
 	}
 }

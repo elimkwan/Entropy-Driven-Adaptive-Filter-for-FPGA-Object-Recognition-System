@@ -24,11 +24,11 @@ class Win_filter{
         unsigned int wpast_output;
         unsigned int wcount;
 
-        Win_filter(float temp){
-            wstep = 8;
-            wlength = 12;
-            max_wlength = 12;
-            wweights.resize(12);
+        Win_filter(float temp, int step, int length){
+            wstep = step;
+            wlength = length;
+            max_wlength = length;
+            wweights.resize(length);
             wpast_output = 0;
             wcount = 0;
         }

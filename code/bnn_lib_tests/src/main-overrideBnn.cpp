@@ -40,11 +40,14 @@
  *
  *****************************************************************************/
 
+
 /*
-	Uses webcam input for classification
+
+	For Ceiling analysis: override BNN to provide perfect raw output
+	TODO: source img from folder(setting 1) instead of webcam
 
 	Command avaliable:
-	./BNN 500 en notdrop notflexw fullroi dynclk base 8 12 1
+	./BNN 500 en notdrop notflexw fullroi dynclk base 8 12	
 
 */
 
@@ -594,27 +597,27 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 			}
 			
 			//for ceiling analysis
-			// if (frame_num < 10){
-			// 	class_result = override_result(class_result, 0);
-			// } else if (frame_num < 20){
-			// 	class_result = override_result(class_result, 1);
-			// } else if (frame_num < 30){
-			// 	class_result = override_result(class_result, 2);
-			// } else if (frame_num < 40){
-			// 	class_result = override_result(class_result, 3);
-			// } else if (frame_num < 50){
-			// 	class_result = override_result(class_result, 4);
-			// } else if (frame_num < 60){
-			// 	class_result = override_result(class_result, 5);
-			// } else if (frame_num < 70){
-			// 	class_result = override_result(class_result, 6);
-			// } else if (frame_num < 80){
-			// 	class_result = override_result(class_result, 7);
-			// } else if (frame_num < 90){
-			// 	class_result = override_result(class_result, 8);
-			// } else if (frame_num < 100){
-			// 	class_result = override_result(class_result, 9);
-			// }
+			if (frame_num < 10){
+				class_result = override_result(class_result, 0);
+			} else if (frame_num < 20){
+				class_result = override_result(class_result, 1);
+			} else if (frame_num < 30){
+				class_result = override_result(class_result, 2);
+			} else if (frame_num < 40){
+				class_result = override_result(class_result, 3);
+			} else if (frame_num < 50){
+				class_result = override_result(class_result, 4);
+			} else if (frame_num < 60){
+				class_result = override_result(class_result, 5);
+			} else if (frame_num < 70){
+				class_result = override_result(class_result, 6);
+			} else if (frame_num < 80){
+				class_result = override_result(class_result, 7);
+			} else if (frame_num < 90){
+				class_result = override_result(class_result, 8);
+			} else if (frame_num < 100){
+				class_result = override_result(class_result, 9);
+			}
 
 			output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
 

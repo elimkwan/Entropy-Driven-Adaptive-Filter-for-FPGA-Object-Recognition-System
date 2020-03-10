@@ -40,21 +40,13 @@ Rect Roi_filter::get_past_roi(){
     return past_roi;
 }
 
-void Roi_filter::store_prev_img(const Mat& mat){
-    prev_img = mat;
+Rect Roi_filter::get_full_roi(){
+    Rect R(Point(0,0), Point(frame_width, frame_height));
+    past_roi = R;
+    return R;
 }
 
-void Roi_filter::bitwise_and_roi(const Mat& mat){
-    cv::Mat img_fg;
-    cv::bitwise_and(mat,prev_img,img_fg);
-    store_prev_img(mat);
-
-    imshow("bitwise_and", img_fg);
-    waitKey(0);
-}
-
-
-Rect Roi_filter::basic_roi(const Mat& mat, bool strict){
+Rect Roi_filter::basic_roi(const Mat& mat){
 
     // Rect R(Point(0,0), Point(frame_width, frame_height));
     // return R;
@@ -86,29 +78,24 @@ Rect Roi_filter::basic_roi(const Mat& mat, bool strict){
     Canny( sobel_mat, canny_mat, thresh, thresh*2);
 
     // imshow("Canny", canny_mat);
-	// waitKey(0);
+    // waitKey(0);
 
     //Group contour
     double max_area = 0;
     vector<vector<Point> > contours;
-    //cout << "---debug opencv 1 --" << endl;
     findContours(canny_mat, contours, CV_RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
-    //cout << "---debug opencv 2 --" << endl;
+    int num_of_contours = contours.size();
+    //cout << "how many contours: " << num_of_contours << endl;
+
     if (contours.size() <= 0){
-        cout << "---debug opencv 3--" << endl;
+        cout << "---Too dark to extract contours--" << endl;
         //too dark cant extract any contours
-        Rect R(Point(0,0), Point(frame_width, frame_height));
-        past_roi = R;
-        return R;
+        return get_full_roi();
     }
-    //cout << "---debug opencv 4 --" << endl;
 
     vector<vector<Point> > contours_poly(contours.size());
     Rect boundRect;
-
-    //int k = 0;
-    //cout << "---debug opencv 5 --" << endl;
 
     for( size_t i = 0; i < contours.size(); i++ )
     {
@@ -118,21 +105,10 @@ Rect Roi_filter::basic_roi(const Mat& mat, bool strict){
     //cout << "---debug opencv 7 --" << endl;
     if (contours_poly.size() <= 0){
         //too dark cant extract any contours
-        //cout << "---debug opencv 8 --" << endl;
-        //cout << "nth in contour poly" <<endl;
-        Rect R(Point(0,0), Point(frame_width, frame_height));
-        past_roi = R;
-        return R;
+        return get_full_roi();
     }
 
-    //cout << "---debug opencv 9 --" << endl;
-
-    //std::sort(contours_poly.begin(), contours_poly.end(), contour_sorter());
-
-    //cout << "---debug opencv 10 --" << endl;
-
     int k = contours_poly.size();
-    //cout << "size of contour poly: " << k << endl;
     
     Rect max_r = boundingRect(contours_poly[k-1]);
 
@@ -147,8 +123,6 @@ Rect Roi_filter::basic_roi(const Mat& mat, bool strict){
         if (contours_poly[i].size() > 1){
             double a = contourArea(contours_poly[i]);
             if (a > 10){
-                //cout << "area of rect: " << a <<endl;
-                //print_vector(contours_poly[i]);
 
                 Rect r1 = boundingRect(contours_poly[i]);
 
@@ -157,20 +131,13 @@ Rect Roi_filter::basic_roi(const Mat& mat, bool strict){
                 x2 = max(x2,r1.x + r1.width);
                 y2 = max(y2,r1.y + r1.height);
 
-                // rectangle(cur, r1, Scalar(0, 255, 255));
-                // imshow("small roi", cur);
-                // waitKey(0);
 
             }
         }
     }
     }
-    //cout << "---debug opencv 13 --" << endl;
 
-    // Rect small_roi(Point(x1,y1), Point(x2,y2));
-    // rectangle(cur, small_roi, Scalar(0, 0, 255));
-    // imshow("small roi", cur);
-    // waitKey(0);
+    small_bounding_r = expand_r(x1,y1,x2,y2, 0.1);
 
     Rect wrapper = expand_r(x1*4,y1*4,x2*4,y2*4,0.1);
 
@@ -206,6 +173,14 @@ Rect Roi_filter::expand_r(int x1, int y1, int x2, int y2, float p){
     return R;
 }
 
+void Roi_filter::init_enhanced_roi(const Mat& img){
+    //cout<<"initialising enhanced roi filter"<<endl;
+    cv::Mat grey_mat;
+    prev_mat = img.clone();
+    cvtColor(img,grey_mat, COLOR_BGR2GRAY);
+    prev_mat_grey = grey_mat.clone();
+}
+
 Rect Roi_filter::enhanced_roi (const Mat& img){
     cv::Mat grey;
     cur_mat = img.clone();
@@ -214,152 +189,24 @@ Rect Roi_filter::enhanced_roi (const Mat& img){
 
     cv::Mat contour_mat, motion_mat, weighted_mat;
     Rect bounding_r;
-    
-    //cout<<"breakpoint1"<<endl;
-    //contour_mat = contour_map();
-    //cout<<"breakpoint2"<<endl;
 
-    //motion_mat = dense_optical_flow(contour_mat);
     motion_mat = simple_optical_flow();
-    cout<<"breakpoint3"<<endl;
 
-    //weighted_mat = weighted_map(motion_mat);
-    //cout<<"breakpoint4"<<endl;
+    bounding_r = basic_roi(motion_mat);
 
-    bounding_r = basic_roi(motion_mat, false);
-    //bounding_r = colour_seg(weighted_mat, 240, 255);
-    cout<<"breakpoint5"<<endl;
+    int certainty = colour_similarity(small_bounding_r, hsv_motion_mat, 10);//sanity check
 
-    //update_enhanced_roi_param(motion_mat);
     prev_mat = cur_mat.clone();
     prev_mat_grey = cur_mat_grey.clone();
-    cout<<"breakpoint6"<<endl;
+
+    if (certainty == 0){
+        bounding_r = past_roi;
+    }
+
+    //update past_roi
+    past_roi = bounding_r;
 
     return bounding_r;
-    
-}
-
-void Roi_filter::init_enhanced_roi(const Mat& img){
-    cv::Mat grey_mat;
-    Mat M(frame_height, frame_width, CV_8UC3, Scalar(0,0,0));
-    cout << "init mask = " << M.channels() << " " << M.depth() <<endl;
-
-    cout<<"initialising"<<endl;
-
-    prev_mat = img.clone();
-    cvtColor(img,grey_mat, COLOR_BGR2GRAY);
-    prev_mat_grey = grey_mat.clone();
-    mask1 = M.clone();
-    mask2 = M.clone();
-    mask3 = M.clone();
-    cout<<"sucessfully init"<<endl;
-}
-
-void Roi_filter::update_enhanced_roi_param (const Mat& motion_mat){
- 
-    prev_mat = cur_mat.clone();
-    prev_mat_grey = cur_mat_grey.clone();
-    mask3 = mask2.clone();
-    mask2 = mask1.clone();
-    mask1 = motion_mat.clone();
-
-}
-
-cv::Mat Roi_filter::contour_map(){
-    cv::Mat a,blur_mat,grad_x, grad_y, abs_grad_x, abs_grad_y, sobel_mat, canny_mat;
-    cv::Mat contour_mat = Mat::zeros(cur_mat.rows, cur_mat.cols, CV_32F);//single channel img
-
-    cout<<"breakpoint1.1"<<endl;
-    a = cur_mat_grey.clone();
-    cout<<"breakpoint1.2"<<endl;
-    int scale = 1;
-	int delta = 0;
-	int ddepth = CV_16S;
-
-    //Blur img
-    GaussianBlur(a, blur_mat, Size(3,3), 0, 0, BORDER_DEFAULT );
-
-    //Sobel
-    /// Gradient X
-	Sobel(blur_mat, grad_x, ddepth, 1, 0, 3, scale, delta, BORDER_DEFAULT );
-	/// Gradient Y
-	Sobel( blur_mat, grad_y, ddepth, 0, 1, 3, scale, delta, BORDER_DEFAULT );
-	convertScaleAbs( grad_x, abs_grad_x );
-	convertScaleAbs( grad_y, abs_grad_y );
-	addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, sobel_mat);
-
-    //Canny
-    int thresh = 100;
-    Canny( sobel_mat, canny_mat, thresh, thresh*2);
-
-    //Group contour
-    vector<vector<Point> > contours;
-    vector<Vec4i> hierarchy;
-    findContours(canny_mat, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
-
-    int num_of_contours = contours.size();
-    
-    cout<<"breakpoint1.3"<<endl;
-    if (num_of_contours <= 0){
-        //too dark cant extract any contours, return black img
-        cout << "too dark contour map empty" <<endl;
-        Mat M(frame_width, frame_height, CV_8UC3, Scalar(0,0,0));
-        //cout << "Contour Black = " << endl << " " << M << endl << endl;
-        return M;
-    }
-
-    vector<vector<Point> > contours_poly(num_of_contours);
-    vector<Rect> boundRect( num_of_contours );
-    vector<Point2f>centers( num_of_contours );
-    vector<float>radius( num_of_contours);
-    for( size_t i = 0; i < num_of_contours; i++ )
-    {
-        approxPolyDP( contours[i], contours_poly[i], 3, true );
-        boundRect[i] = boundingRect( contours_poly[i] );
-        minEnclosingCircle( contours_poly[i], centers[i], radius[i] );
-    }
-
-    for( size_t i = 0; i< num_of_contours; i++ )
-    {
-        drawContours( contour_mat, contours_poly, (int)i, 255 );
-        rectangle( contour_mat, boundRect[i].tl(), boundRect[i].br(), 125, -1 );
-        circle( contour_mat, centers[i], (int)radius[i], 125, -1 );
-    }
-
-    cout<<"breakpoint1.6"<<endl;
-
-    // Rect boundRect;
-    // int k = 0;
-
-    // for( size_t i = 0; i < contours.size(); i++ )
-    // {
-    //     approxPolyDP( contours[i], contours_poly[i], 3, true );
-    //     k = i;
-    // }
-    // std::sort(contours_poly.begin(), contours_poly.end(), contour_sorter());
-    
-    // Rect max_r = boundingRect(contours_poly[k]);
-
-    // drawContours(contour_mat, contours, -1 , Scalar(255,255,255), CV_FILLED, 8);
-
-    // cout<<"breakpoint1.7"<<endl;
-    // int idx = 0;
-    // for( ; idx >= 0; idx = hierarchy[idx][0] )
-    // {
-    //     Scalar color( rand()&255, rand()&255, rand()&255 );
-    //     drawContours(contour_mat, contours, idx, color, CV_FILLED, 8, hierarchy );
-    // }
-
-    // if (contour_mat.empty()){
-    //     cout << "contour map empty" <<endl;
-    // } else {
-    //     //cout << "Contour = " << endl << " " << contour_mat << endl << endl;
-    //     imshow("Contour Mat", contour_mat);
-    //     waitKey(0);
-    // }
-
-
-    return contour_mat;
 }
 
 cv::Mat Roi_filter::simple_optical_flow(){
@@ -377,42 +224,6 @@ cv::Mat Roi_filter::simple_optical_flow(){
     Mat magn, angle, magn_norm;
     cartToPolar(flow_parts[0], flow_parts[1], magn, angle, true);
 
-    // cout << "m = " << motion_mat.rows << " " << motion_mat.cols << " " << motion_mat.depth() <<endl;
-    // cout << "c = " << contour_mat.rows << " " << contour_mat.cols << " " << contour_mat.depth() <<endl;
-
-    // cout<<"breakpoint2.1"<<endl;
-
-    // cout<<"breakpoint2.11"<<endl;
-    // normalize(motion_mat, motion_mat_norm, 0.0f, 1.0f, NORM_MINMAX);
-
-    // Scalar mm = mean(motion_mat_norm, motion_mat_norm > 0.0);
-    // double mean = mm[0];
-    // // double min, max, avg;
-    // // cv::minMaxLoc(contour_mat_norm, &min, &max);
-    // // avg = (max-min)/2;
-    // cout << "avg = " << mean <<endl;
-
-    //normalize(contour_mat, contour_mat_norm, 0.0f, mean, NORM_MINMAX);
-
-    //combining contour map with motion map
-    //cout<<"breakpoint2.12"<<endl;
-    //addWeighted( motion_mat_norm, 0.5, contour_mat_norm, 0.5, 0, magn_combined);
-    //add(motion_mat_norm, contour_mat_norm, magn_combined);
-    //cout<<"breakpoint2.13"<<endl;
-
-    // ofstream fs;
-    // fs.open ("result-matrice.csv",std::ios_base::app);
-    // fs << "\nmotion_mat_norm";
-    // fs << motion_mat_norm; // command to save the data
-    // fs << "\n\n\n"; // command to save the data
-    // fs << "\ncontour_mat_norm";
-    // fs << contour_mat_norm; // command to save the data
-    // fs << "\n\n\n"; // command to save the data
-    // fs << "\nmagn_combined";
-    // fs << magn_combined; // command to save the data
-    // fs << "\n\n\n"; // command to save the data
-    // fs.close(); // releasing the file.
-
     normalize(magn, magn_norm, 0.0f, 1.0f, NORM_MINMAX);
     angle *= ((1.f / 360.f) * (180.f / 255.f));
     cout<<"breakpoint2.3"<<endl;
@@ -424,9 +235,10 @@ cv::Mat Roi_filter::simple_optical_flow(){
     _hsv[2] = magn_norm; //value
     merge(_hsv, 3, hsv);
     hsv.convertTo(hsv8, CV_8U, 255.0);
-    cvtColor(hsv8, bgr, COLOR_HSV2BGR);
 
-    //cout << "optical flow = " << bgr.rows << " " << bgr.cols << " " << bgr.channels() << " " << bgr.depth() <<endl;
+    hsv_motion_mat = hsv8.clone();
+
+    cvtColor(hsv8, bgr, COLOR_HSV2BGR);
 
     // if (bgr.empty()){
     //     cout << "motion map is empty" <<endl;
@@ -439,155 +251,72 @@ cv::Mat Roi_filter::simple_optical_flow(){
     return bgr;
 }
 
-cv::Mat Roi_filter::dense_optical_flow(const Mat& contour_mat){
+int Roi_filter::colour_similarity(Rect r, const Mat& a, int n){
+    //assume a is hsv image
 
-    cv::Mat cur, prev;
-    cur = cur_mat_grey.clone();
-    prev = prev_mat_grey.clone();
+    int centre_x, centre_y, ran_x, ran_y;
+    unsigned char h,s,v, h2, s2, v2;
+    vector<float> h_values, v_values;
+    float h_en, v_en;    
 
-    Mat flow(prev.size(), CV_32FC2);
-    calcOpticalFlowFarneback(prev, cur, flow, 0.5, 3, 15, 3, 5, 1.2, 0);
+    int i = 0;
+    int sign = 1;
+    while(i < n){
 
-    // visualization
-    Mat flow_parts[2];
-    split(flow, flow_parts);
-    Mat motion_mat, angle, motion_mat_norm, contour_mat_norm, magn_norm, magn_combined;
-    cartToPolar(flow_parts[0], flow_parts[1], motion_mat, angle, true);
+        //cout << "r width height" << int(r.width/4) << " " << int(r.height/4) <<endl;
 
-    cout << "m = " << motion_mat.rows << " " << motion_mat.cols << " " << motion_mat.depth() <<endl;
-    cout << "c = " << contour_mat.rows << " " << contour_mat.cols << " " << contour_mat.depth() <<endl;
+        ran_x = int(r.x + int(r.width/2) +  sign*rand()%(int(r.width/4)));
+        ran_y = int(r.y + int(r.height/2) + sign*rand()%(int(r.height/4)));
 
-    cout<<"breakpoint2.1"<<endl;
+        //cout << "randx randy: " << ran_x << " " << ran_y << endl;
 
-    cout<<"breakpoint2.11"<<endl;
-    normalize(motion_mat, motion_mat_norm, 0.0f, 1.0f, NORM_MINMAX);
+        Vec3b p2 = a.at<Vec3b>(ran_y,ran_x);
 
-    Scalar mm = mean(motion_mat_norm, motion_mat_norm > 0.0);
-    double mean = mm[0];
-    // double min, max, avg;
-    // cv::minMaxLoc(contour_mat_norm, &min, &max);
-    // avg = (max-min)/2;
-    cout << "avg = " << mean <<endl;
+        h2 = p2[0];
+        v2 = p2[2];
+        //cout << "random pt colour :" << p2 << endl;
 
-    normalize(contour_mat, contour_mat_norm, 0.0f, mean, NORM_MINMAX);
+        h_values.push_back(h2);
+        v_values.push_back(v2);
 
-    //combining contour map with motion map
-    cout<<"breakpoint2.12"<<endl;
-    addWeighted( motion_mat_norm, 0.5, contour_mat_norm, 0.5, 0, magn_combined);
-    //add(motion_mat_norm, contour_mat_norm, magn_combined);
-    cout<<"breakpoint2.13"<<endl;
+        sign = (-1)*(sign);
+        i++;
+    }
 
-    ofstream fs;
-    fs.open ("result-matrice.csv",std::ios_base::app);
-    fs << "\nmotion_mat_norm";
-    fs << motion_mat_norm; // command to save the data
-    fs << "\n\n\n"; // command to save the data
-    fs << "\ncontour_mat_norm";
-    fs << contour_mat_norm; // command to save the data
-    fs << "\n\n\n"; // command to save the data
-    fs << "\nmagn_combined";
-    fs << magn_combined; // command to save the data
-    fs << "\n\n\n"; // command to save the data
-    fs.close(); // releasing the file.
+    h_values = normalise(h_values);
+    v_values = normalise(v_values);
 
-    normalize(magn_combined, magn_norm, 0.0f, 1.0f, NORM_MINMAX);
-    angle *= ((1.f / 360.f) * (180.f / 255.f));
-    cout<<"breakpoint2.3"<<endl;
+    h_en = entropy(h_values);
+    v_en = entropy(v_values);
 
-    //build hsv image
-    Mat _hsv[3], hsv, hsv8, bgr;
-    _hsv[0] = angle; //hue
-    _hsv[1] = Mat::ones(angle.size(), CV_32F); //saturation
-    _hsv[2] = magn_norm; //value
-    merge(_hsv, 3, hsv);
-    hsv.convertTo(hsv8, CV_8U, 255.0);
-    cvtColor(hsv8, bgr, COLOR_HSV2BGR);
+    cout << "entropy of h and v: " << h_en << " " << v_en << endl;
 
-    cout << "optical flow = " << bgr.rows << " " << bgr.cols << " " << bgr.channels() << " " << bgr.depth() <<endl;
+    if (h_en <= 0.5 && v_en <= 1.0){
+        return 2; //very certain
+    } else if (h_en <= 0.5){
+        return 1; //certain
+    } else {
+        return 0; //not certain
+    }
 
-    // if (bgr.empty()){
-    //     cout << "motion map is empty" <<endl;
-    // } else {
-    //     //cout << "Optical = " << endl << " " << bgr << endl << endl;
-    //     imshow("Dense optical flow", bgr);
-    //     waitKey(0);
-    // }
-
-    return bgr;
 }
 
-cv::Mat Roi_filter::weighted_map(const Mat& cur){
-
-    cv::Mat m1(cur_mat.rows, cur_mat.cols, CV_8UC3, Scalar(0,0,0));
-    cv::Mat m2(cur_mat.rows, cur_mat.cols, CV_8UC3, Scalar(0,0,0));
-    cv::Mat m3(cur_mat.rows, cur_mat.cols, CV_8UC3, Scalar(0,0,0));
-    //cv::Mat m4(cur_mat.rows, cur_mat.cols, CV_8UC3, Scalar(0,0,0));
-
-    float a1,a2,a3;
-    a1=0.5;
-    a2=0.75;
-    a3=0.9;
-
-    cout << "cur = " << cur.rows << " " << cur.cols << " " << cur.channels()  << " " << cur.depth() <<endl;
-    cout << "mask1 = " <<  mask1.rows << " " <<  mask1.cols << " " << cur.channels()  << " " << mask1.depth() <<endl;
-
-    addWeighted(cur, a1, mask1, (1-a1), 0.0, m1);
-    addWeighted(m1, a2, mask2, (1-a2), 0.0, m2);
-    addWeighted(m2, a3, mask3, (1-a3), 0.0, m3);
-
-    //bitwise_not(m3, m4);
-
-    return m3;
+std::vector<float> Roi_filter::normalise(std::vector<float> &cp)
+{	
+    int mx = *max_element(std::begin(cp), std::end(cp));
+    
+    for(auto &elem : cp)
+        elem = (float)elem / mx;
+    
+    return cp;
 }
 
-Rect Roi_filter::colour_seg(const Mat& cur, int low_thres, int up_thres){
-
-    // cv::Mat grey;
-    // //Convert img to grey scale
-    // cv::cvtColor(cur, grey, CV_BGR2GRAY);
-
-    // //Canny
-    // cv::Mat canny_mat;
-    // int thresh = 100;
-
-    // Canny(grey, canny_mat, thresh, thresh*2);
-    // vector<vector<Point> > contours;
-    // vector<Vec4i> hierarchy;
-    // findContours(canny_mat, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
-
-    // if (contours.size() <= 0){
-    //     //too dark cant extract any contours
-    //     cout << "too dark cant compute bounding rect"<<endl;
-    //     Rect R(Point(0,0), Point(frame_width, frame_height));
-    //     return R;
-    // }
-
-    // vector<vector<Point> > contours_poly(contours.size());
-    // Rect boundRect;
-    // int k = 0;
-
-    // for( size_t i = 0; i < contours.size(); i++ )
-    // {
-    //     approxPolyDP( contours[i], contours_poly[i], 3, true );
-    //     k = i;
-    // }
-
-    // std::sort(contours_poly.begin(), contours_poly.end(), contour_sorter());
-    
-    // Rect max_r = boundingRect(contours_poly[k]);
-
-    // return max_r;
-
-    //Converting image from BGR to HSV color space.
-    Mat hsv;
-    cvtColor(cur, hsv, COLOR_BGR2HSV);
-    
-    Mat mask;
-    inRange(hsv, Scalar(0, 200, low_thres), Scalar(180, 255, up_thres), mask);
-
-    // imshow("mask", hsv);
-    // waitKey(0);
-
-
-    return basic_roi(hsv, true);
+float Roi_filter::entropy(std::vector<float> &arg_vec)
+{
+    float sum = 0;
+    for(auto const &elem : arg_vec){
+        sum += elem * std::log2(1/elem);
+    }
+    //cout << "uncertainty: " << sum <<endl;
+    return sum;
 }
