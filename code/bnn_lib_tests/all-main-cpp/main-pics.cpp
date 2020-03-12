@@ -47,7 +47,7 @@
 	Caution: do not use frame number more than no. of image in the folder
 
 	Command avaliable:
-	./BNN 50 en notdrop notflexw fullroi ndynclk nbase 1 12
+	./BNN 50 en notdrop notflexw fullroi ndynclk base 1 12
 
 */
 
@@ -410,13 +410,18 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 	// }
 
 	glob(TEST_DIR + "dataset/*.png", fn, false);
-	size_t count_fn = fn.size(); 
+	//sort(fn.begin(), fn.end());
+
+	//print_vector(fn);
+
+	size_t count_fn = fn.size();
 	for (size_t i=0; i<count_fn; i++)
 	{
 		cout<<"loading images "<< i <<endl;
 		frames.push_back(imread(fn[i]));
 	}
 
+	cout<<"loaded all images " <<endl;
 	cur_frame = frames[0];
 
 
@@ -538,7 +543,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 			quantiseAndPack<8, 1>(img, &packedImages[0], psi);
 
 
-		} else {
+		} else if (roi_config == "full-roi") {
 
 			//use full frame all the time, no roi
 			cv::resize(cur_frame, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
@@ -547,6 +552,16 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 			std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
 			quantiseAndPack<8, 1>(img, &packedImages[0], psi);
 
+		} else {
+
+			roi = r_filter.naive_roi(cur_frame, 128);
+			src = cur_frame(roi);
+
+			cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
+			flatten_mat(reduced_sized_frame, bgr);
+			vec_t img;
+			std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+			quantiseAndPack<8, 1>(img, &packedImages[0], psi);
 		}
 		//if dropping frame, not going to resize roi and transform it to array
 		auto t2 = chrono::high_resolution_clock::now();	//time statistics

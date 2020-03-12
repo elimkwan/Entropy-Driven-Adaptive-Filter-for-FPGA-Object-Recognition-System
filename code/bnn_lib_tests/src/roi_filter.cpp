@@ -196,11 +196,12 @@ Rect Roi_filter::enhanced_roi (const Mat& img){
 
     int certainty = colour_similarity(small_bounding_r, hsv_motion_mat, 10);//sanity check
 
-    prev_mat = cur_mat.clone();
-    prev_mat_grey = cur_mat_grey.clone();
-
     if (certainty == 0){
         bounding_r = past_roi;
+    } else {
+        prev_mat = cur_mat.clone();
+        prev_mat_grey = cur_mat_grey.clone();
+
     }
 
     //update past_roi
@@ -215,8 +216,12 @@ cv::Mat Roi_filter::simple_optical_flow(){
     cur = cur_mat_grey.clone();
     prev = prev_mat_grey.clone();
 
+    cout << "debug pot1" << endl;
+
     Mat flow(prev.size(), CV_32FC2);
     calcOpticalFlowFarneback(prev, cur, flow, 0.5, 3, 15, 3, 5, 1.2, 0);
+
+    cout << "debug pot2" << endl;
 
     // visualization
     Mat flow_parts[2];

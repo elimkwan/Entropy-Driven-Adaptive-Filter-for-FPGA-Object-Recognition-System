@@ -145,7 +145,9 @@ int classify_frames(unsigned int no_of_frame, unsigned int expected_class, int o
 	cap.set(CV_CAP_PROP_FRAME_WIDTH,frame_width);
 	cap.set(CV_CAP_PROP_FRAME_HEIGHT,frame_height);
 
-	while(frame_num < 20){
+	cout << "Get ready..." <<endl;
+
+	while(frame_num < 100){
 		cap >> cur_frame;
 		imshow("Original", cur_frame);
 		waitKey(25);
