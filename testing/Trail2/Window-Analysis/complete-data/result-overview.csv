@@ -1,12 +1,12 @@
-
+,,,,,,,
 Setting, Window Step, Window Length, Accuracy, Adjusted Accuracy, Performance Gain, Avg. Classification Rate, Avg. Processing Rate 
-
+,,,,,,,
 Setting, Window Step, Window Length, Accuracy, Adjusted Accuracy, Performance Gain, Avg. Classification Rate, Avg. Processing Rate 
 3,1,24,80,90,12.5,36.6911,182.556
 3,4,24,80,88,10,36.8234,45.9528
 3,8,24,80,83,3.75,36.8621,23.1127
 3,23,24,80,92,15,36.8958,8.45351
-3,4,12,80,73,-8.75,36.9344,46.0991
+3,4,12,80,73,+AC0-8.75,36.9344,46.0991
 3,8,12,80,83,3.75,37.0006,23.2176
 4,1,24,48,50.5,5.20833,36.6775,182.825
 4,4,24,48,49.5,3.125,36.7808,45.9115
@@ -14,9 +14,9 @@ Setting, Window Step, Window Length, Accuracy, Adjusted Accuracy, Performance Ga
 4,23,24,48,48.5,1.04167,36.8349,8.21318
 4,4,12,48,51.5,7.29167,36.9319,46.1527
 4,8,12,48,50.5,5.20833,36.958,23.1389
-
+,,,,,,,
 Setting, Window Step, Window Length, Accuracy, Adjusted Accuracy, Performance Gain, Avg. Classification Rate, Avg. Processing Rate 
-
+,,,,,,,
 Setting, Window Step, Window Length, Accuracy, Adjusted Accuracy, Performance Gain, Avg. Classification Rate, Avg. Processing Rate 
 2,1,24,76,80.5,5.92105,36.1912,182.153
 2,4,24,76,79.5,4.60526,36.8044,45.9275
@@ -30,3 +30,21 @@ Setting, Window Step, Window Length, Accuracy, Adjusted Accuracy, Performance Ga
 7,23,24,65.5,81,23.6641,36.8546,8.22803
 7,4,12,65.5,83,26.7176,36.9181,46.1315
 7,8,12,65.5,83.5,27.4809,36.9628,23.15
+
+Setting, Window Step, Window Length, Accuracy, Adjusted Accuracy, Performance Gain, Avg. Classification Rate, Avg. Processing Rate 
+3,16,24,80,83,3.75,36.9018,11.8496
+4,16,24,48,46.5,-3.125,36.7894,11.6114
+2,16,24,76,75,-1.31579,36.7746,11.6406
+7,16,24,65.5,78,19.084,36.8194,11.6505
+
+Setting, Window Step, Window Length, Accuracy, Adjusted Accuracy, Performance Gain, Avg. Classification Rate, Avg. Processing Rate 
+3,2,24,80,87,8.75,36.7424,91.7433
+3,3,24,80,86,7.5,36.7967,61.1414
+4,2,24,48,50,4.16667,36.7025,91.5933
+4,3,24,48,49.5,3.125,36.7638,61.2369
+
+Setting, Window Step, Window Length, Accuracy, Adjusted Accuracy, Performance Gain, Avg. Classification Rate, Avg. Processing Rate 
+2,2,24,76,79,3.94737,36.7388,91.6704
+2,3,24,76,80,5.26316,36.7933,61.2381
+7,2,24,65.5,84.5,29.0076,36.7239,91.628
+7,3,24,65.5,85,29.771,36.7657,61.1671
