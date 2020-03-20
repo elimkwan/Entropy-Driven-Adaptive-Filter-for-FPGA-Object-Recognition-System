@@ -55,8 +55,6 @@
 
 */
 
-*/
-
 #include "../tiny_cnn/tiny_cnn.h"
 #include "../tiny_cnn/util/util.h"
 #include <iostream>
@@ -277,50 +275,9 @@ int main(int argc, char** argv)
 	int wstep = 1;
 	int wlength = 10;
 
-	//config_clock(100);
-
-	//vector<vector<int>> ws_wl = { {1,1}, {1, 24}, {8,24}, {23,24}, {4,12}, {8,12} };
+	config_clock(0);
 
 	wrapper(no_of_frame, uncertainty_config, dropf_bool, win_bool, roi_config, dynclk_bool);
-
-	// for (int i = 1; i < 3; i++){
-	// 	no_of_frame = 10;
-	// 	wstep = ws_wl[i][0];
-	// 	wlength = ws_wl[i][1];
-	// 	classify_frames(no_of_frame, uncertainty_config, dropf_bool, win_bool, roi_config, dynclk_bool, base_bool, wstep, wlength, i);
-	// }
-
-	// for (int i = 1; i < 5; i++){
-
-	// 	if ( i == 2){
-	// 		no_of_frame = 500;
-	// 	} else{
-	// 		no_of_frame = 1000;
-	// 	}
-
-	// 	for (int j = 0; j < ws_wl.size(); j ++){
-	// 		base_bool = false;
-	// 		wstep = ws_wl[j][0];
-	// 		wlength = ws_wl[j][1];
-	// 		classify_frames(no_of_frame, uncertainty_config, dropf_bool, win_bool, roi_config, dynclk_bool, base_bool, wstep, wlength, i);
-	// 	}
-	// }
-
-	// for (int i = 1; i < 5; i++){
-
-	// 	if ( i == 2){
-	// 		no_of_frame = 500;
-	// 	} else{
-	// 		no_of_frame = 1000;
-	// 	}
-
-	// 	for (int j = 0; j < ws_wl.size(); j ++){
-	// 		base_bool = true;
-	// 		wstep = ws_wl[j][0];
-	// 		wlength = ws_wl[j][1];
-	// 		classify_frames(no_of_frame, uncertainty_config, dropf_bool, win_bool, roi_config, dynclk_bool, base_bool, wstep, wlength, i);
-	// 	}
-	// }
 
 	return 1;
 }
@@ -365,6 +322,8 @@ void config_clock(int desired_frequency){
 	} else if (desired_frequency == 50){
 		//*pl_clk = 0x00A00200;
 		*pl_clk = 0x00A00400; //25MHz
+	} else if (desired_frequency == 0){
+		*pl_clk = 0x00A00100; //100MHz
 	}
 
 	cout << "New PL clock configuration: " << hex << *pl_clk << endl;
@@ -404,22 +363,23 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 
 
 	fs.open ("./experiments/result/result-overview.csv",std::ios_base::app);
-	fs << "\nSetting, Window Step, Window Length, Accuracy, Adjusted Accuracy, Performance Gain\n" ;
+	fs << "\nSetting, Window Step, Window Length, Accuracy, Adjusted Accuracy, Performance Gain, Avg. Classification Rate, Avg. Processing Rate \n" ;
 
-	int no_of_dataset = 4;
-	vector<vector<int>> ws_wl = {{1, 24}, {8,24}, {23,24}, {4,12}, {8,12} };
+	vector<vector<int>> ws_wl = {{1, 24}, {4, 24},{8,24}, {23,24}, {4,12}, {8,12} };
+	//vector<vector<int>> ws_wl = {{4, 24}};
+	vector<int> dataset_list = {2,7};
 	bool base = false;
 	int wstep, wlength, folder_num;
 
-	for (int i = 4; i < (no_of_dataset+1); i++){
+	for (int i = 0; i < dataset_list.size(); i++){
 
-		if ( i == 2){
+		folder_num = dataset_list[i];
+
+		if ( folder_num  == 3){
 			no_of_frame = 500;
 		} else{
 			no_of_frame = 1000;
 		}
-		//no_of_frame = 10;
-		folder_num = i;
 
 		//loading dataset
 		vector<Mat> frames;
@@ -443,7 +403,6 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 			//----------------------------------------------------------------------------------------------------------------
 			//----------------------------------------------------------------------------------------------------------------
 
-			//classify_frames(no_of_frame, uncertainty_config, dropf_bool, win_config, roi_config, dynclk, base, wstep, wlength, folder_num);
 			//Initialize variables
 			cv::Mat reduced_sized_frame(32, 32, CV_8UC3);
 			cv::Mat cur_frame, src, reduced_roi_frame;
@@ -469,26 +428,8 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 			string result_dir = "./experiments/result/" + foldername + ".csv"; 
 			myfile.open (result_dir,std::ios_base::app);
 			myfile << foldername << "\n";
-			myfile << "\nFrame No., classification rate(fps) , Output , Adjusted Output, preprocess_time(us), bnn_time(us), window_filter_time(us), uncertainty_time(us), en/var/a , ma, sd, state, mode\n";
+			myfile << "\nFrame No., classification rate(fps),  processing rate(fps) , Output , Adjusted Output, Simulate Cap Time(us), preprocess_time(us), bnn_time(us), window_filter_time(us), uncertainty_time(us), en/var/a , ma, sd, state, mode\n";
 
-
-			// vector<Mat> frames;
-			// vector<cv::String> fn;
-
-			// string src_dir =  TEST_DIR + "dataset" + to_string(folder_num) + "/*.png";
-
-			// glob(src_dir, fn, false);
-
-			// //print_vector(fn);
-
-			// size_t count_fn = fn.size();
-			// for (size_t i=0; i<count_fn; i++)
-			// {
-			// 	cout<<"loading images "<< i <<endl;
-			// 	frames.push_back(imread(fn[i]));
-			// }
-
-			// cout<<"loaded all images " <<endl;
 			cur_frame = frames[0];
 
 			Roi_filter r_filter(frame_width,frame_height);
@@ -510,128 +451,142 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 			int pastclk = 100;
 			float acc_time = 0;
 			int processed_frames = 0;
+			string display_output = "";
+			Rect roi(Point(0,0), Point(frame_width, frame_height));
+			Rect display_roi(Point(0,0), Point(frame_width, frame_height));
+			float cap_time, preprocessing_time = 0.0;
+			vector<float> time_arr;
+			float processing_fps = 0;
+			bool not_dropping_frame = true;
+			float bnn_time, uncertainty_time, wfilter_time, en_time, var_time;
+			vector<double> u(5, 0.0);
+			vector<float> process_rate_arr;
 
 
-			while(frame_num < no_of_frame){
+			while(frame_num < count_fn){
 
+				bool c30 = ((frame_num+1)%5 == 0);
 				auto t0 = chrono::high_resolution_clock::now(); //time statistics
 
-				cur_frame = frames[frame_num];
+				#pragma omp parallel sections
+				{
+					#pragma omp section
+					{
 
-				Rect roi(Point(0,0), Point(frame_width, frame_height));
+						cur_frame = frames[frame_num];
+						waitKey(5);
 
-				bool not_dropping_frame = true;
+						auto t1 = chrono::high_resolution_clock::now();	//time statistics
+						cap_time = chrono::duration_cast<chrono::microseconds>( t1 - t0 ).count();
+					}
 
-				if (base) {
-					not_dropping_frame = (frame_num < 2 || frames_dropped == 4); //to set fps to 30fps manually
-				} else {
-					not_dropping_frame = ( drop_frame_mode == 0 || drop_frame_mode == 1 || drop_frame_mode == 2 || drop_frame_mode == 3 || (drop_frame_mode == 4 && frames_dropped == 5) || (drop_frame_mode == 5 && frames_dropped == 10));
+					#pragma omp section
+					{
+
+
+						if (base) {
+							not_dropping_frame = (frame_num < 2 || frames_dropped == 4); //to set fps to 30fps manually
+						} else {
+							not_dropping_frame = ( drop_frame_mode == 0 || drop_frame_mode == 1 || drop_frame_mode == 2 || drop_frame_mode == 3 || (drop_frame_mode == 4 && frames_dropped == 5) || (drop_frame_mode == 5 && frames_dropped == 10));
+						}
+
+						if (c30 || frame_num == 0){
+							display_frame = cur_frame.clone();
+						}
+
+						auto t1 = chrono::high_resolution_clock::now(); //time statistics
+						if (roi_config == "eff-roi"){
+
+							cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC);
+							if (drop_frame_mode != 1){
+								r_filter.init_enhanced_roi(reduced_roi_frame);
+							}
+
+							if (drop_frame_mode == 0){
+
+								roi = r_filter.get_full_roi();
+
+							}else if (drop_frame_mode == 1){
+
+								roi = r_filter.enhanced_roi(reduced_roi_frame);
+
+							}else if (drop_frame_mode == 2){
+
+								roi = r_filter.basic_roi(reduced_roi_frame);
+
+							}else{
+								roi = r_filter.get_past_roi();
+							}
+
+							src = cur_frame(roi);
+							cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
+							flatten_mat(reduced_sized_frame, bgr);
+							vec_t img;
+							std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+							quantiseAndPack<8, 1>(img, &packedImages[0], psi);
+
+						} else if (roi_config == "opt-roi"){
+
+							cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
+
+							if (frame_num < 2){
+								roi = r_filter.get_full_roi();
+								r_filter.init_enhanced_roi(reduced_roi_frame);
+							} else {
+								roi = r_filter.enhanced_roi(reduced_roi_frame);
+							}
+
+							src = cur_frame(roi);
+							cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
+							flatten_mat(reduced_sized_frame, bgr);
+							vec_t img;
+							std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+							quantiseAndPack<8, 1>(img, &packedImages[0], psi);
+
+
+						} else if (roi_config == "cont-roi") {
+							
+							cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
+
+							if (frame_num < 2){
+								roi = r_filter.get_full_roi();
+							} else {
+								roi = r_filter.basic_roi(reduced_roi_frame);
+							}
+
+							src = cur_frame(roi);
+							cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
+							flatten_mat(reduced_sized_frame, bgr);
+							vec_t img;
+							std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+							quantiseAndPack<8, 1>(img, &packedImages[0], psi);
+
+
+						} else if (roi_config == "full-roi") {
+
+							//use full frame all the time, no roi
+							cv::resize(cur_frame, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
+							flatten_mat(reduced_sized_frame, bgr);
+							vec_t img;
+							std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+							quantiseAndPack<8, 1>(img, &packedImages[0], psi);
+
+						} else {
+
+							roi = r_filter.naive_roi(cur_frame, 128);
+							src = cur_frame(roi);
+
+							cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
+							flatten_mat(reduced_sized_frame, bgr);
+							vec_t img;
+							std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+							quantiseAndPack<8, 1>(img, &packedImages[0], psi);
+						}
+
+						auto t2 = chrono::high_resolution_clock::now();	//time statistics
+						preprocessing_time = chrono::duration_cast<chrono::microseconds>( t2 - t0 ).count();
+					}
 				}
-				
-				auto t00 = chrono::high_resolution_clock::now(); //time statistics
-				auto temp = chrono::duration_cast<chrono::microseconds>( t00 - t0 ).count();
-				auto preprocessing_time = temp;
-				auto bnn_time = temp;
-				auto uncertainty_time = temp;
-				auto wfilter_time = temp;
-				auto en_time = temp;
-				auto var_time = temp;
-
-				vector<double> u(5, 0.0);
-
-				display_frame = cur_frame.clone();
-
-				auto t1 = chrono::high_resolution_clock::now(); //time statistics
-				if (roi_config == "eff-roi"){
-
-					cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC);
-					if (drop_frame_mode != 1){
-						r_filter.init_enhanced_roi(reduced_roi_frame);
-					}
-
-					if (drop_frame_mode == 0){
-
-						roi = r_filter.get_full_roi();
-
-					}else if (drop_frame_mode == 1){
-
-						roi = r_filter.enhanced_roi(reduced_roi_frame);
-
-					}else if (drop_frame_mode == 2){
-
-						roi = r_filter.basic_roi(reduced_roi_frame);
-
-					}else{
-						roi = r_filter.get_past_roi();
-					}
-
-					src = cur_frame(roi);
-					cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-					flatten_mat(reduced_sized_frame, bgr);
-					vec_t img;
-					std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-					quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-
-				} else if (roi_config == "opt-roi"){
-
-					cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
-
-					if (frame_num < 2){
-						roi = r_filter.get_full_roi();
-						r_filter.init_enhanced_roi(reduced_roi_frame);
-					} else {
-						roi = r_filter.enhanced_roi(reduced_roi_frame);
-					}
-
-					src = cur_frame(roi);
-					cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-					flatten_mat(reduced_sized_frame, bgr);
-					vec_t img;
-					std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-					quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-
-
-				} else if (roi_config == "cont-roi") {
-					
-					cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
-
-					if (frame_num < 2){
-						roi = r_filter.get_full_roi();
-					} else {
-						roi = r_filter.basic_roi(reduced_roi_frame);
-					}
-
-					src = cur_frame(roi);
-					cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-					flatten_mat(reduced_sized_frame, bgr);
-					vec_t img;
-					std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-					quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-
-
-				} else if (roi_config == "full-roi") {
-
-					//use full frame all the time, no roi
-					cv::resize(cur_frame, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-					flatten_mat(reduced_sized_frame, bgr);
-					vec_t img;
-					std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-					quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-
-				} else {
-
-					roi = r_filter.naive_roi(cur_frame, 128);
-					src = cur_frame(roi);
-
-					cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-					flatten_mat(reduced_sized_frame, bgr);
-					vec_t img;
-					std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-					quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-				}
-				//if dropping frame, not going to resize roi and transform it to array
-				auto t2 = chrono::high_resolution_clock::now();	//time statistics
-				preprocessing_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
 
 				if (dynclk){
 					if ( (drop_frame_mode == 4 || drop_frame_mode == 5) && pastclk == 100){
@@ -700,24 +655,35 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 				std::cout << "Expected class: " << expected_class << endl;
 				std::cout << "-------------------------------------------------"<< endl;
 
-
 				auto overall_time = chrono::duration_cast<chrono::microseconds>( t7 - t0 ).count();
+				
+				int n = w_filter.getwstep();
+				time_arr.insert(time_arr.begin(), overall_time);
+				if (time_arr.size() < n){
+					n = time_arr.size();
+				}
+				float p_sum = 0.0f;
+				for (int i = 0; i<n; i++){
+					p_sum += time_arr[i];
+				}
+				//cout << "p_sum" << p_sum <<endl;
+				if (time_arr.size() > 24){
+					time_arr.pop_back();
+				}
+
 				std::string r_out, a_out;
 				float cls_fps;
-				if (!not_dropping_frame && (dropf_config || base)){
-					r_out = " ";
-					a_out = " ";
-					acc_time += overall_time;
-					cls_fps = 0;
-
-				} else{
+				if (c30){
 					r_out = classes[output];
 					a_out = classes[adjusted_output];
+					display_output = classes[adjusted_output];
+					display_roi = roi;
 
-					if (acc_time == 0){
-						acc_time = overall_time;
-					}
+					// if (acc_time == 0){
+					// 	acc_time = overall_time;
+					// }
 
+					acc_time += overall_time;
 					cls_fps = 1000000/(float)acc_time;
 					acc_time = 0;
 
@@ -730,11 +696,18 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 					if (expected_class == classes[adjusted_output]){
 						identified_adj++;
 					}
+
+					processing_fps = 1000000/p_sum;
+					process_rate_arr.push_back(processing_fps);
+
+				} else {
+					r_out = " ";
+					a_out = " ";
+					acc_time += overall_time;
+					cls_fps = 0;
+					processing_fps = 0;
 				}
-
-				//float period = (float)overall_time/1000000;
-				//float total_fps = 1000000/(float)overall_time;
-
+				
 				string u_stats = to_string(u[0]);
 				string u_mode = to_string(u[4]);
 				if (u[0] == 0){
@@ -742,7 +715,7 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 					u_mode = "";
 				}
 
-				myfile << frame_num << "," << cls_fps << "," << r_out << "," << a_out << "," << preprocessing_time << "," <<  bnn_time << "," << wfilter_time << "," << uncertainty_time << "," <<  u_stats << "," << u[1] << "," << u[2] << "," << u[3] << "," << drop_frame_mode << "\n";
+				myfile << frame_num << "," << cls_fps << "," << processing_fps << "," << r_out << "," << a_out << "," << cap_time << "," << preprocessing_time << "," <<  bnn_time << "," << wfilter_time << "," << uncertainty_time << "," <<  u_stats << "," << u[1] << "," << u[2] << "," << u[3] << "," << drop_frame_mode << "\n";
 				
 				if (frame_num != 0){
 					total_time = total_time + (float)overall_time/1000000;
@@ -764,13 +737,21 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 				}	
 			}
 
+			float pro_sum = 0;
+			for(float const &elem : process_rate_arr)
+			{
+				pro_sum += elem;
+			}
+			float processing_rate = pro_sum/process_rate_arr.size();
+			//float processing_rate = 1/(wstep*(total_time/no_of_frame));
+
 			float accuracy = 100.0*((float)identified/(float)processed_frames);
 			float accuracy_adj = 100.0*((float)identified_adj/(float)processed_frames);
 			float avg_cls_fps = (float)(processed_frames)/total_time;
 			//float avg_rate = 1/((float)win_step*((float)total_time/(float)no_of_frame)); //avg rate for processing win_step number of frame
 			cout << "results: " << identified << " " << processed_frames << " " << identified_adj << " " << total_time << " " << no_of_frame << endl;;
-			myfile << "\n Accuracy, Adjusted Accuracy, Avg Classification Rate";
-			myfile << "\n" << accuracy << "," << accuracy_adj << "," << avg_cls_fps ;
+			myfile << "\n Accuracy, Adjusted Accuracy, Avg Classification Rate, Avg Processing Rate";
+			myfile << "\n" << accuracy << "," << accuracy_adj << "," << avg_cls_fps << "," << processing_rate;
 			myfile << "\n \n";
 			myfile.close();
 
@@ -779,7 +760,7 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 				gain = (accuracy_adj-accuracy)*100/accuracy;
 			}
 
-			fs << folder_num << "," << wstep << "," << wlength << "," << accuracy << "," << accuracy_adj << "," << gain << endl;;
+			fs << folder_num << "," << wstep << "," << wlength << "," << accuracy << "," << accuracy_adj << "," << gain << "," << avg_cls_fps << "," << processing_rate << endl;;
 
 			//----------------------------------------------------------------------------------------------------------------
 			//----------------------------------------------------------------------------------------------------------------
@@ -792,351 +773,7 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 	//reset clock
 	//config_clock(100);
     //Release memory
-	//cout<<"debug memory1: " << &packedImages << endl;
     sds_free(packedImages);
-	//cout<<"debug memory2: " << &packedOut << endl;
 	sds_free(packedOut);
     return 1;
 }
-
-// int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dropf_config, bool win_config, string roi_config, bool dynclk, bool base, int wstep, int wlength, int folder_num){
-	
-// 	//Initialize variables
-// 	cv::Mat reduced_sized_frame(32, 32, CV_8UC3);
-// 	cv::Mat cur_frame, src, reduced_roi_frame;
-// 	//Mat bnn_input = Mat(frame_size, frame_size, CV_8UC3);
-// 	unsigned int number_class = 10;
-// 	unsigned int output = 0;
-// 	vector<string> classes = {"airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"};
-//     unsigned int size, frame_num = 0;
-// 	tiny_cnn::vec_t outTest(number_class, 0);
-// 	std::vector<uint8_t> bgr;
-// 	std::vector<std::vector<float> > results_history; //for storing the classification result of previous frame
-// 	float identified = 0.0 , identified_adj = 0.0, total_time = 0.0;
-
-	
-// 	string foldername = "setting" + to_string(folder_num) + "-" + to_string(wstep) + "-" + to_string(wlength) + ".csv";
-// 	if (base) {
-// 		foldername = foldername + "-base";
-// 	}	
-// 	std::cout << "-------------------------------------------------"<< endl;
-// 	std::cout << foldername << endl;
-// 	std::cout << "-------------------------------------------------"<< endl;
-
-// 	string result_dir = "./experiments/result/" + foldername; 
-// 	myfile.open (result_dir,std::ios_base::app);
-// 	myfile << foldername << "\n";
-// 	myfile << "\nFrame No., classification rate(fps) , Output , Adjusted Output, preprocess_time(us), bnn_time(us), window_filter_time(us), uncertainty_time(us), en/var/a , ma, sd, state, mode\n";
-
-
-// 	vector<Mat> frames;
-// 	vector<cv::String> fn;
-
-// 	string src_dir =  TEST_DIR + "dataset" + to_string(folder_num) + "/*.png";
-
-// 	glob(src_dir, fn, false);
-
-// 	//print_vector(fn);
-
-// 	size_t count_fn = fn.size();
-// 	for (size_t i=0; i<count_fn; i++)
-// 	{
-// 		cout<<"loading images "<< i <<endl;
-// 		frames.push_back(imread(fn[i]));
-// 	}
-
-// 	cout<<"loaded all images " <<endl;
-// 	cur_frame = frames[0];
-
-
-// 	Roi_filter r_filter(frame_width,frame_height);
-// 	r_filter.init_enhanced_roi(cur_frame);
-
-// 	//output filter with windowing techniques
-// 	//Win_filter w_filter(0.2f, 8, 12);
-// 	Win_filter w_filter(0.2f, wstep, wlength);
-// 	w_filter.init_weights(0.2f);
-// 	//cout << "size of weight:" << w_filter.wweights.size() << endl;
-
-// 	Uncertainty u_filter(5);
-// 	//Uncertainty var_filter(5);//testing various uncertainty scheme
-
-// 	int drop_frame_mode = 0;
-// 	int frames_dropped = 0;
-// 	unsigned int adjusted_output = 0;
-// 	cv::Mat display_frame;
-// 	int pastclk = 100;
-// 	float acc_time = 0;
-// 	int processed_frames = 0;
-
-
-// 	while(frame_num < no_of_frame){
-
-// 		auto t0 = chrono::high_resolution_clock::now(); //time statistics
-
-// 		cur_frame = frames[frame_num];
-
-// 		Rect roi(Point(0,0), Point(frame_width, frame_height));
-
-// 		bool not_dropping_frame = true;
-
-// 		if (base) {
-// 			not_dropping_frame = (frame_num < 2 || frames_dropped == 4); //to set fps to 30fps manually
-// 		} else {
-// 			not_dropping_frame = ( drop_frame_mode == 0 || drop_frame_mode == 1 || drop_frame_mode == 2 || drop_frame_mode == 3 || (drop_frame_mode == 4 && frames_dropped == 5) || (drop_frame_mode == 5 && frames_dropped == 10));
-// 		}
-		
-// 		auto t00 = chrono::high_resolution_clock::now(); //time statistics
-// 		auto temp = chrono::duration_cast<chrono::microseconds>( t00 - t0 ).count();
-// 		auto preprocessing_time = temp;
-// 		auto bnn_time = temp;
-// 		auto uncertainty_time = temp;
-// 		auto wfilter_time = temp;
-// 		auto en_time = temp;
-// 		auto var_time = temp;
-
-// 		vector<double> u(5, 0.0);
-
-// 		display_frame = cur_frame.clone();
-
-// 		auto t1 = chrono::high_resolution_clock::now(); //time statistics
-// 		if (roi_config == "eff-roi"){
-
-// 			cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC);
-// 			if (drop_frame_mode != 1){
-// 				r_filter.init_enhanced_roi(reduced_roi_frame);
-// 			}
-
-// 			if (drop_frame_mode == 0){
-
-// 				roi = r_filter.get_full_roi();
-
-// 			}else if (drop_frame_mode == 1){
-
-// 				roi = r_filter.enhanced_roi(reduced_roi_frame);
-
-// 			}else if (drop_frame_mode == 2){
-
-// 				roi = r_filter.basic_roi(reduced_roi_frame);
-
-// 			}else{
-// 				roi = r_filter.get_past_roi();
-// 			}
-
-// 			src = cur_frame(roi);
-// 			cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-// 			flatten_mat(reduced_sized_frame, bgr);
-// 			vec_t img;
-// 			std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-// 			quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-
-// 		} else if (roi_config == "opt-roi"){
-
-// 			cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
-
-// 			if (frame_num < 2){
-// 				roi = r_filter.get_full_roi();
-// 				r_filter.init_enhanced_roi(reduced_roi_frame);
-// 			} else {
-// 				roi = r_filter.enhanced_roi(reduced_roi_frame);
-// 			}
-
-// 			src = cur_frame(roi);
-// 			cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-// 			flatten_mat(reduced_sized_frame, bgr);
-// 			vec_t img;
-// 			std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-// 			quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-
-
-// 		} else if (roi_config == "cont-roi") {
-			
-// 			cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
-
-// 			if (frame_num < 2){
-// 				roi = r_filter.get_full_roi();
-// 			} else {
-// 				roi = r_filter.basic_roi(reduced_roi_frame);
-// 			}
-
-// 			src = cur_frame(roi);
-// 			cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-// 			flatten_mat(reduced_sized_frame, bgr);
-// 			vec_t img;
-// 			std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-// 			quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-
-
-// 		} else if (roi_config == "full-roi") {
-
-// 			//use full frame all the time, no roi
-// 			cv::resize(cur_frame, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-// 			flatten_mat(reduced_sized_frame, bgr);
-// 			vec_t img;
-// 			std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-// 			quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-
-// 		} else {
-
-// 			roi = r_filter.naive_roi(cur_frame, 128);
-// 			src = cur_frame(roi);
-
-// 			cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-// 			flatten_mat(reduced_sized_frame, bgr);
-// 			vec_t img;
-// 			std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-// 			quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-// 		}
-// 		//if dropping frame, not going to resize roi and transform it to array
-// 		auto t2 = chrono::high_resolution_clock::now();	//time statistics
-// 		preprocessing_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
-
-// 		if (dynclk){
-// 			if ( (drop_frame_mode == 4 || drop_frame_mode == 5) && pastclk == 100){
-// 				config_clock(50);
-// 				pastclk = 50;
-// 			} else if ((drop_frame_mode == 0 || drop_frame_mode == 1 || drop_frame_mode == 2 || drop_frame_mode == 3) && pastclk == 50){
-// 				config_clock(100);
-// 				pastclk = 100;
-// 			}
-// 		}
-
-// 		if (!not_dropping_frame && (dropf_config || base)){
-// 			frames_dropped +=1;//drop the frame
-
-// 		} else {
-// 			//reset frames_dropped
-// 			frames_dropped = 0; 
-			
-// 			auto t3 = chrono::high_resolution_clock::now();	//time statistics
-// 			// Call the hardware function
-// 			kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,1,0);
-// 			if (frame_num != 1)
-// 			{
-// 				kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,0,1);
-// 			}
-// 			// Extract the output of BNN and classify result
-// 			std::vector<float> class_result;
-// 			copyFromLowPrecBuffer<unsigned short>(&packedOut[0], outTest);
-// 			for(unsigned int j = 0; j < number_class; j++) {			
-// 				class_result.push_back(outTest[j]);
-// 			}
-
-// 			output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
-
-// 			auto t4 = chrono::high_resolution_clock::now();	//time statistics
-// 			bnn_time = chrono::duration_cast<chrono::microseconds>( t4 - t3 ).count();
-
-// 			//Data post-processing:
-// 			//calculate uncertainty
-// 			u = u_filter.cal_uncertainty(class_result,uncertainty_config, output);
-// 			drop_frame_mode = u[4];
-
-// 			auto t5 = chrono::high_resolution_clock::now();	//time statistics
-// 			uncertainty_time = chrono::duration_cast<chrono::microseconds>( t5 - t4 ).count();
-
-// 			//use window
-// 			w_filter.update_memory(class_result);
-// 			adjusted_output = w_filter.analysis(drop_frame_mode, win_config); //if win_config is true, win_step and length are flexible, else they are fixed to 8 12
-// 			//-------------------------------------------
-
-// 			auto t6 = chrono::high_resolution_clock::now();	//time statistics
-// 			wfilter_time = chrono::duration_cast<chrono::microseconds>( t6 - t5).count();
-// 		}
-
-// 		auto t7 = chrono::high_resolution_clock::now();	//time statistics
-
-
-// 		std::string expected_class = fn[frame_num];
-// 		int first_idx = expected_class.find_last_of('_') + 1;
-// 		expected_class = expected_class.substr(first_idx, expected_class.length()-4);
-// 		expected_class.erase(expected_class.length()-4);
-
-// 		std::cout << "-------------------------------------------------"<< endl;
-// 		std::cout << "Frame num: " << frame_num << endl;
-// 		std::cout << "Adjusted output: " << classes[adjusted_output] << endl;
-// 		std::cout << "Expected class: " << expected_class << endl;
-// 		std::cout << "-------------------------------------------------"<< endl;
-
-
-// 		auto overall_time = chrono::duration_cast<chrono::microseconds>( t7 - t0 ).count();
-// 		std::string r_out, a_out;
-// 		float cls_fps;
-// 		if (!not_dropping_frame && (dropf_config || base)){
-// 			r_out = " ";
-// 			a_out = " ";
-// 			acc_time += overall_time;
-// 			cls_fps = 0;
-
-// 		} else{
-// 			r_out = classes[output];
-// 			a_out = classes[adjusted_output];
-
-// 			if (acc_time == 0){
-// 				acc_time = overall_time;
-// 			}
-
-// 			cls_fps = 1000000/(float)acc_time;
-// 			acc_time = 0;
-
-// 			processed_frames += 1;
-
-// 			//cout <<"expected" << expected_class <<" " << adjusted_output <<endl;
-// 			if (expected_class == classes[output]){
-// 				identified ++;
-// 			}
-// 			if (expected_class == classes[adjusted_output]){
-// 				identified_adj++;
-// 			}
-// 		}
-
-// 		//float period = (float)overall_time/1000000;
-// 		//float total_fps = 1000000/(float)overall_time;
-
-// 		string u_stats = to_string(u[0]);
-// 		string u_mode = to_string(u[4]);
-// 		if (u[0] == 0){
-// 			u_stats = "";
-// 			u_mode = "";
-// 		}
-
-// 		myfile << frame_num << "," << cls_fps << "," << r_out << "," << a_out << "," << preprocessing_time << "," <<  bnn_time << "," << wfilter_time << "," << uncertainty_time << "," <<  u_stats << "," << u[1] << "," << u[2] << "," << u[3] << "," << drop_frame_mode << "\n";
-		
-// 		if (frame_num != 0){
-// 			total_time = total_time + (float)overall_time/1000000;
-// 		}
-
-// 		//Display output
-// 		// rectangle(display_frame, roi, Scalar(0, 0, 255));
-// 		putText(display_frame, classes[adjusted_output], Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));	
-// 		imshow("Original", display_frame);
-// 		waitKey(25);
-
-// 		frame_num++;
-
-// 		char ESC = waitKey(1);	
-// 		if (ESC == 27) 
-// 		{
-// 			cout << "ESC key is pressed by user" << endl;
-// 			break;
-// 		}	
-// 	}
-
-// 	float accuracy = 100.0*((float)identified/(float)processed_frames);
-// 	float accuracy_adj = 100.0*((float)identified_adj/(float)processed_frames);
-// 	float avg_cls_fps = (float)(processed_frames)/total_time;
-// 	//float avg_rate = 1/((float)win_step*((float)total_time/(float)no_of_frame)); //avg rate for processing win_step number of frame
-// 	cout << "results: " << identified << " " << processed_frames << " " << identified_adj << " " << total_time << " " << no_of_frame << endl;;
-// 	myfile << "\n Accuracy, Adjusted Accuracy, Avg Classification Rate";
-// 	myfile << "\n" << accuracy << "," << accuracy_adj << "," << avg_cls_fps ;
-// 	myfile << "\n \n";
-// 	myfile.close();
-
-// 	float gain = 0;
-// 	if (accuracy != 0){
-// 		gain = (accuracy_adj-accuracy)*100/accuracy;
-// 	}
-
-// 	fs << folder_num << "," << wstep << "," << wlength << "," << accuracy << "," << accuracy_adj << "," << gain << endl;;
-
-// }

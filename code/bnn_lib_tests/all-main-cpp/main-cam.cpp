@@ -1,4 +1,4 @@
-/******************************************************************************
+ /******************************************************************************
  *  Copyright (c) 2016, Xilinx, Inc.
  *  All rights reserved.
  *
@@ -44,7 +44,22 @@
 	Uses webcam input for classification
 
 	Command avaliable:
-	./BNN 500 en notdrop notflexw fullroi dynclk base 8 12 1
+	./BNN 500 na notdrop notflexw full-roi ndynclk base 4
+	./BNN 500 en notdrop notflexw full-roi ndynclk nbase 4
+	./BNN 500 en notdrop notflexw opt-roi ndynclk nbase 4
+	./BNN 500 en notdrop notflexw cont-roi ndynclk nbase 4
+	./BNN 500 en notdrop notflexw eff-roi ndynclk nbase 4
+	./BNN 500 en notdrop flexw eff-roi ndynclk nbase 4
+
+	
+	./BNN 500 en drop notflexw full-roi ndynclk nbase 4
+	./BNN 500 en drop notflexw opt-roi ndynclk nbase 4
+	./BNN 500 en drop notflexw cont-roi ndynclk nbase 4
+	./BNN 500 en drop notflexw eff-roi ndynclk nbase 4
+	./BNN 500 en drop flexw eff-roi ndynclk nbase 4
+
+	./BNN 500 en drop flexw eff-roi dynclk nbase 4
+
 
 */
 
@@ -98,7 +113,7 @@ const std::string BNN_PARAMS = USER_DIR + "params/cifar10/";
 ofstream myfile;
 
 //main functions
-int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dropf_config, bool win_config, string roi_config, bool dynclk, unsigned int expected_class, bool base, int wstep, int wlength);
+int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dropf_config, bool win_config, string roi_config, bool dynclk, unsigned int expected_class, bool base);
 void config_clock(int desired_frequency);
 vector<float> override_result(vector<float> class_result, int expected_class);
 
@@ -266,9 +281,7 @@ int main(int argc, char** argv)
 	std::string roi_config = argv[5];
 	std::string dynclk = argv[6];
 	std::string base = argv[7];
-	unsigned int wstep = (atoi(argv[8]));
-	unsigned int wlength = (atoi(argv[9]));
-	unsigned int expected_class = (atoi(argv[10]));
+	unsigned int expected_class = (atoi(argv[8]));
 
 	bool dropf_bool = false;
 	if (dropf_config == "drop"){
@@ -292,7 +305,7 @@ int main(int argc, char** argv)
 
 	config_clock(100);
 
-	classify_frames(no_of_frame, uncertainty_config, dropf_bool, win_bool, roi_config, dynclk_bool, expected_class, base_bool, wstep, wlength);
+	classify_frames(no_of_frame, uncertainty_config, dropf_bool, win_bool, roi_config, dynclk_bool, expected_class, base_bool);
 
 	return 1;
 }
@@ -356,11 +369,28 @@ vector<float> override_result(vector<float> class_result, int expected_class){
 
 }
 
-int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dropf_config, bool win_config, string roi_config, bool dynclk, unsigned int expected_class, bool base, int wstep, int wlength){
+int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dropf_config, bool win_config, string roi_config, bool dynclk, unsigned int expected_class, bool base){
 
-	myfile.open ("result.csv",std::ios_base::app);
-	//myfile << "\nFrame No., Time per frame(us), frame rate (us), Output , Adjusted Output \n";
-	myfile << "\nFrame No., inst camera frame rate (fps), classification rate(fps) , , Output , Adjusted Output, cap_time(us), preprocess_time(us), parallel(capnpre)(us), bnn_time(us), window_filter_time(us), uncertainty_time(us), en/var/a , ma, sd, state, mode\n";
+	string d = "-ndrop";
+	string w = "-nflexw-";
+	string c = "-ndynclk";
+	string ba = "-nbase";
+	if (dropf_config){
+		d = "-drop";
+	}
+	if (win_config){
+		w = "-flexw-";
+	}
+	if (dynclk){
+		c = "-dynclk";
+	}
+	if (base){
+		ba = "-base";
+	}
+	std::string result_dir = "./experiments/result-" + uncertainty_config + d + w + roi_config + c + ba +".csv";
+	myfile.open (result_dir,std::ios_base::app);
+	myfile << "\n" << result_dir;
+	myfile << "\nFrame No., inst camera frame rate (fps), classification rate(fps), Output , Adjusted Output, cap_time(us), preprocess_time(us), parallel(capnpre)(us), bnn_time(us), window_filter_time(us), uncertainty_time(us), en/var/a , ma, sd, state, mode\n";
 
     //Initialize variables
 	cv::Mat reduced_sized_frame(32, 32, CV_8UC3);
@@ -402,10 +432,12 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
     vector<Mat> frames;
 
 	VideoCapture cap(0 + CV_CAP_V4L2);
-	if(!cap.open(0))
+	if(!cap.open(0 + CV_CAP_V4L2))
 	{
 		cout << "cannot open camera" << endl;
-	} 
+		return 0;
+	}
+
 	cap.set(CV_CAP_PROP_FRAME_WIDTH,frame_width);
 	cap.set(CV_CAP_PROP_FRAME_HEIGHT,frame_height);
 	//std::cout << "\nCamera resolution = " << cap.get(CV_CAP_PROP_FRAME_WIDTH) << "x" << cap.get(CV_CAP_PROP_FRAME_HEIGHT) << std::endl;
@@ -418,7 +450,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 
 	//output filter with windowing techniques
 	//Win_filter w_filter(0.2f, 8, 12);
-	Win_filter w_filter(0.2f, wstep, wlength);
+	Win_filter w_filter(0.2f, 4, 24);
 	w_filter.init_weights(0.2f);
 	//cout << "size of weight:" << w_filter.wweights.size() << endl;
 
@@ -428,12 +460,16 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 	int drop_frame_mode = 0;
 	int frames_dropped = 0;
 	unsigned int adjusted_output = 0;
-	cv::Mat display_frame;
+	cv::Mat display_frame = cur_frame.clone();
 	int pastclk = 100;
 	float acc_time = 0;
 	int processed_frames = 0;
+	string display_output = "";
+	Rect display_roi(Point(0,0), Point(frame_width, frame_height));
 
     while(frame_num < size){
+
+		bool c30 = ((frame_num+1)%5 == 0);
 
 		auto t0 = chrono::high_resolution_clock::now(); //time statistics
 
@@ -442,10 +478,12 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 		bool not_dropping_frame = true;
 
 		if (base) {
-			not_dropping_frame = (frame_num < 2 || frames_dropped == 4); //to set fps to 30fps manually
+			not_dropping_frame = (frame_num < 2 || frames_dropped == 4); //to set processing rate to 30fps manually
 		} else {
 			not_dropping_frame = ( drop_frame_mode == 0 || drop_frame_mode == 1 || drop_frame_mode == 2 || drop_frame_mode == 3 || (drop_frame_mode == 4 && frames_dropped == 5) || (drop_frame_mode == 5 && frames_dropped == 10));
 		}
+
+
 		
 		auto t00 = chrono::high_resolution_clock::now(); //time statistics
 		auto temp = chrono::duration_cast<chrono::microseconds>( t00 - t0 ).count();
@@ -466,7 +504,9 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 				auto t1 = chrono::high_resolution_clock::now(); //time statistics
 
 				cap >> cur_frame;
-				display_frame = cur_frame.clone();
+				if (c30){
+					display_frame = cur_frame.clone();
+				}
 
 				auto t2 = chrono::high_resolution_clock::now();	//time statistics
 				cap_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
@@ -492,6 +532,10 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 						roi = r_filter.enhanced_roi(reduced_roi_frame);
 
 					}else if (drop_frame_mode == 2){
+
+						roi = r_filter.get_past_roi();
+
+					}else if (drop_frame_mode == 3){
 
 						roi = r_filter.basic_roi(reduced_roi_frame);
 
@@ -592,29 +636,6 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 			for(unsigned int j = 0; j < number_class; j++) {			
 				class_result.push_back(outTest[j]);
 			}
-			
-			//for ceiling analysis
-			// if (frame_num < 10){
-			// 	class_result = override_result(class_result, 0);
-			// } else if (frame_num < 20){
-			// 	class_result = override_result(class_result, 1);
-			// } else if (frame_num < 30){
-			// 	class_result = override_result(class_result, 2);
-			// } else if (frame_num < 40){
-			// 	class_result = override_result(class_result, 3);
-			// } else if (frame_num < 50){
-			// 	class_result = override_result(class_result, 4);
-			// } else if (frame_num < 60){
-			// 	class_result = override_result(class_result, 5);
-			// } else if (frame_num < 70){
-			// 	class_result = override_result(class_result, 6);
-			// } else if (frame_num < 80){
-			// 	class_result = override_result(class_result, 7);
-			// } else if (frame_num < 90){
-			// 	class_result = override_result(class_result, 8);
-			// } else if (frame_num < 100){
-			// 	class_result = override_result(class_result, 9);
-			// }
 
 			output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
 
@@ -651,15 +672,12 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 		auto overall_time = chrono::duration_cast<chrono::microseconds>( t9 - t0 ).count();
 		std::string r_out, a_out;
 		float cls_fps;
-		if (!not_dropping_frame && (dropf_config || base)){
-			r_out = " ";
-			a_out = " ";
-			acc_time += overall_time;
-			cls_fps = 0;
 
-		} else{
+		if (c30){
 			r_out = classes[output];
 			a_out = classes[adjusted_output];
+			display_output = classes[adjusted_output];
+			display_roi = roi;
 
 			if (acc_time == 0){
 				acc_time = overall_time;
@@ -677,7 +695,40 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 			if (int(expected_class) == int(adjusted_output)){
 				identified_adj++;
 			}
+		} else {
+			r_out = " ";
+			a_out = " ";
+			acc_time += overall_time;
+			cls_fps = 0;
 		}
+
+		// if (!not_dropping_frame && (dropf_config || base || c30)){
+		// 	r_out = " ";
+		// 	a_out = " ";
+		// 	acc_time += overall_time;
+		// 	cls_fps = 0;
+
+		// } else{
+		// 	r_out = classes[output];
+		// 	a_out = classes[adjusted_output];
+
+		// 	if (acc_time == 0){
+		// 		acc_time = overall_time;
+		// 	}
+
+		// 	cls_fps = 1000000/(float)acc_time;
+		// 	acc_time = 0;
+
+		// 	processed_frames += 1;
+
+		// 	//cout <<"expected" << expected_class <<" " << adjusted_output <<endl;
+		// 	if (int(expected_class) == int(output)){
+		// 		identified ++;
+		// 	}
+		// 	if (int(expected_class) == int(adjusted_output)){
+		// 		identified_adj++;
+		// 	}
+		// }
 
 		//float period = (float)overall_time/1000000;
 		//float total_fps = 1000000/(float)overall_time;
@@ -689,7 +740,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 			u_mode = "";
 		}
 
-		myfile << frame_num << "," << cam_fps << "," << cls_fps << "," << " " << "," << r_out << "," << a_out << "," << cap_time << "," << preprocessing_time << "," << parallel_time << "," <<  bnn_time << "," << wfilter_time << "," << uncertainty_time << "," <<  u_stats << "," << u[1] << "," << u[2] << "," << u[3] << "," << drop_frame_mode << "\n";
+		myfile << frame_num << "," << cam_fps << "," << cls_fps << "," << r_out << "," << a_out << "," << cap_time << "," << preprocessing_time << "," << parallel_time << "," <<  bnn_time << "," << wfilter_time << "," << uncertainty_time << "," <<  u_stats << "," << u[1] << "," << u[2] << "," << u[3] << "," << drop_frame_mode << "\n";
 		
 		if (frame_num != 0){
 			total_time = total_time + (float)overall_time/1000000;
@@ -697,8 +748,8 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 		}
 
 		//Display output
-		rectangle(display_frame, roi, Scalar(0, 0, 255));
-		putText(display_frame, classes[adjusted_output], Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));	
+		rectangle(display_frame, display_roi, Scalar(0, 0, 255));
+		putText(display_frame, display_output, Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));	
 		imshow("Original", display_frame);
 		waitKey(25);
 
@@ -715,7 +766,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 	float accuracy = 100.0*((float)identified/(float)processed_frames);
 	float accuracy_adj = 100.0*((float)identified_adj/(float)processed_frames);
 	float avg_cam_fps = (float)(frame_num)/total_cap_time;
-	float avg_cls_fps = (float)(processed_frames)/total_time;
+	float avg_cls_fps = (float)(frame_num)/total_time;
 	//float avg_rate = 1/((float)win_step*((float)total_time/(float)no_of_frame)); //avg rate for processing win_step number of frame
 	cout << "results: " << identified << " " << processed_frames << " " << identified_adj << " " << total_time << " " << no_of_frame << endl;;
 	myfile << "\n Accuracy, Adjusted Accuracy, Avg Frame Rate, Avg Classification Rate";
@@ -723,9 +774,8 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 	myfile << "\n \n";
 	myfile.close();
 
-	if (cap.open(0)){
-		cap.release();
-	}
+	cap.release();
+
 	//reset clock
 	config_clock(100);
     //Release memory
