@@ -1,0 +1,16 @@
+
+Dataset, Base Setting, Drop frame , Flex window , Dynclk ,ROI scheme, Accuracy, Adjusted Accuracy, Classification Rate, Processing Rate
+2,0,1,1,1,eff-roi,82.5,96.5,13.5146,40.3636
+2,1,1,1,1,eff-roi,81,91.5,20.6449,42.2632
+
+Dataset, Base Setting, Drop frame , Flex window , Dynclk ,ROI scheme, Accuracy, Adjusted Accuracy, Classification Rate, Processing Rate
+3,0,1,1,1,eff-roi,89,87,17.4516,46.348
+3,1,1,1,1,eff-roi,85,76,16.0504,38.9218
+4,0,1,1,1,eff-roi,70.5,85,16.5706,41.6482
+4,1,1,1,1,eff-roi,67.5,88.5,11.6447,33.1049
+5,0,1,1,1,eff-roi,61.5,65,23.0663,45.3041
+5,1,1,1,1,eff-roi,64,75,12.956,35.4423
+6,0,1,1,1,eff-roi,20.5,32,29.1589,44.7387
+6,1,1,1,1,eff-roi,21,33,18.0153,39.7602
+7,0,1,1,1,eff-roi,52,61.5,25.5828,44.8445
+7,1,1,1,1,eff-roi,50.5,55,14.853,36.9381
