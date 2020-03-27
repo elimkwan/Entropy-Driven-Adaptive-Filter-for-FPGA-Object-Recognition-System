@@ -7,6 +7,13 @@
 std::vector<double> Uncertainty::cal_uncertainty(std::vector<float> class_result, string mode, int result){
     //mode 1: varience; mode 2:entropy; mode 3: correlation
 
+    srand(11); //set random seed for constant exp. result
+
+    //when not using the uncertainty analysis at all
+    if (mode == "na"){
+        return {100, 100, 0, 0, 0};
+    }
+
     std::vector<double> input_v(class_result.begin(), class_result.end());
     double ma = 0;
 
@@ -323,8 +330,9 @@ vector<double> Uncertainty::moving_var(vector<double> ma, int n, double mean_of_
 }
 
 int Uncertainty::update_state(double sample, double old_ma, double old_sd, float alpha, int n){
-    if (__state < n){
+    if (__state <= n){
         __state += 1;
+        return __state;
     } else if (sample >= (old_ma-alpha*old_sd) && sample <= (old_ma+alpha*old_sd)){
         if (__state != (4*n +4)){
             __state += 1;

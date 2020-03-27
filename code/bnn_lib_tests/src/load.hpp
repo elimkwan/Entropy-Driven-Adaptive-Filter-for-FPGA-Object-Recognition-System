@@ -28,28 +28,4 @@ namespace load
         }
         return images;
     }
-
-    // void load_video(){
-
-    // }
-
-    // VideoCapture cam_init(){
-    //     VideoCapture cap(0 + CV_CAP_V4L2);
-	//     if(!cap.open(0))
-	//     {
-	//         cout << "cannot open camera" << endl;
-	//         return 0;
-	//     }
-
-	//     cap.set(CV_CAP_PROP_FRAME_WIDTH,frame_width);
-	//     cap.set(CV_CAP_PROP_FRAME_HEIGHT,frame_height);
-	//     std::cout << "\nCamera resolution = " << cap.get(CV_CAP_PROP_FRAME_WIDTH) << "x" << cap.get(CV_CAP_PROP_FRAME_HEIGHT) << std::endl;
-    //     return cap;
-    // }
-
-    // VideoCapture use_cam(VideoCapture cap){
-    //     Mat cap_frame;
-    //     cap >> cap_frame;
-	// 	return cap_frame;
-    // }
 }

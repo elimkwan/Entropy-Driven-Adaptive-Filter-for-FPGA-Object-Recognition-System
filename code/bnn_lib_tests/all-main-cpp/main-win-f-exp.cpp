@@ -365,21 +365,15 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 	fs.open ("./experiments/result/result-overview.csv",std::ios_base::app);
 	fs << "\nSetting, Window Step, Window Length, Accuracy, Adjusted Accuracy, Performance Gain, Avg. Classification Rate, Avg. Processing Rate \n" ;
 
-	vector<vector<int>> ws_wl = {{1, 24}, {4, 24},{8,24}, {23,24}, {4,12}, {8,12} };
-	//vector<vector<int>> ws_wl = {{4, 24}};
-	vector<int> dataset_list = {2,7};
-	bool base = false;
+	//vector<vector<int>> ws_wl = {{1, 24}, {2,24}, {3, 24}, {4, 24},{8,24}, {16,24}, {23,24}, {4,12}, {8,12} };
+	vector<vector<int>> ws_wl = {{11,12}};
+	vector<int> dataset_list = {3,4,2,7};
+	bool base = true;
 	int wstep, wlength, folder_num;
 
 	for (int i = 0; i < dataset_list.size(); i++){
 
 		folder_num = dataset_list[i];
-
-		if ( folder_num  == 3){
-			no_of_frame = 500;
-		} else{
-			no_of_frame = 1000;
-		}
 
 		//loading dataset
 		vector<Mat> frames;
@@ -749,7 +743,7 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 			float accuracy_adj = 100.0*((float)identified_adj/(float)processed_frames);
 			float avg_cls_fps = (float)(processed_frames)/total_time;
 			//float avg_rate = 1/((float)win_step*((float)total_time/(float)no_of_frame)); //avg rate for processing win_step number of frame
-			cout << "results: " << identified << " " << processed_frames << " " << identified_adj << " " << total_time << " " << no_of_frame << endl;;
+			cout << "results: " << identified << " " << processed_frames << " " << identified_adj << " " << total_time << endl;;
 			myfile << "\n Accuracy, Adjusted Accuracy, Avg Classification Rate, Avg Processing Rate";
 			myfile << "\n" << accuracy << "," << accuracy_adj << "," << avg_cls_fps << "," << processing_rate;
 			myfile << "\n \n";
