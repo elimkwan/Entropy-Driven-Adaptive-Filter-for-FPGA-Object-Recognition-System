@@ -362,12 +362,12 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 	fs.open ("./experiments/result/result-overview.csv",std::ios_base::app);
 	fs << "\nDataset, Base Setting, Drop frame , Flex window , Dynclk ,ROI scheme, Accuracy, Adjusted Accuracy, Classification Rate, Background Classification Rate, Processing Rate, Processing Rate per Processed Img, Processing Time per Img, Avg. Processing Time per Processed Img\n" ;
 
-	vector<int> dataset_list = {2,1,3,4,5};
+	vector<int> dataset_list = {1,3,4};
 	bool base;
 	int wstep = 4;
 	int wlength = 24;
-	vector<string> roi_list = {"full-roi","eff-roi"};
-	vector<bool> flexw_list = {false,true};
+	vector<string> roi_list = {"eff-roi"};
+	vector<bool> flexw_list = {false};
 	vector<bool> base_list = {false};
 
 	uncertainty_config = "en";
@@ -440,8 +440,8 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 					r_filter.init_enhanced_roi(cur_frame);
 
 					//output filter with windowing techniques
-					//Win_filter w_filter(0.2f, 8, 12);
-					Win_filter w_filter(0.2f, wstep, wlength);
+					Win_filter w_filter(0.2f, 4, 24);
+					//Win_filter w_filter(0.2f, wstep, wlength);
 					w_filter.init_weights(0.2f);
 					//cout << "size of weight:" << w_filter.wweights.size() << endl;
 
@@ -497,9 +497,10 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 									not_dropping_frame = ( drop_frame_mode == 0 || drop_frame_mode == 1 || drop_frame_mode == 2 || drop_frame_mode == 3 || (drop_frame_mode == 4 && frames_dropped == 5) || (drop_frame_mode == 5 && frames_dropped == 10));
 								}
 
-								if (c30 || frame_num == 0){
-									display_frame = cur_frame.clone();
-								}
+								display_frame = cur_frame.clone();
+								// if (c30 || frame_num == 0){
+								// 	display_frame = cur_frame.clone();
+								// }
 
 								auto t1 = chrono::high_resolution_clock::now(); //time statistics
 								if (roi_config == "eff-roi"){
@@ -735,9 +736,9 @@ int wrapper(unsigned int no_of_frame, string uncertainty_config, bool dropf_conf
 
 						//Display output
 						// rectangle(display_frame, roi, Scalar(0, 0, 255));
-						putText(display_frame, classes[adjusted_output], Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));	
-						imshow("Original", display_frame);
-						waitKey(25);
+						// putText(display_frame, classes[adjusted_output], Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));	
+						// imshow("Original", display_frame);
+						// waitKey(25);
 
 						frame_num++;
 

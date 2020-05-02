@@ -390,7 +390,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 	std::string result_dir = "./experiments/result-" + uncertainty_config + d + w + roi_config + c + ba +".csv";
 	myfile.open (result_dir,std::ios_base::app);
 	myfile << "\n" << result_dir;
-	myfile << "\nFrame No., inst camera frame rate (fps), classification rate(fps), Output , Adjusted Output, cap_time(us), preprocess_time(us), parallel(capnpre)(us), bnn_time(us), window_filter_time(us), uncertainty_time(us), en/var/a , ma, sd, state, mode\n";
+	myfile << "\nFrame No., inst camera frame rate (fps), classification rate(fps), Displayed Output , Adjusted Output, cap_time(us), preprocess_time(us), parallel(capnpre)(us), bnn_time(us), window_filter_time(us), uncertainty_time(us), en/var/a , ma, sd, state, mode\n";
 
     //Initialize variables
 	cv::Mat reduced_sized_frame(32, 32, CV_8UC3);
@@ -504,9 +504,10 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 				auto t1 = chrono::high_resolution_clock::now(); //time statistics
 
 				cap >> cur_frame;
-				if (c30){
-					display_frame = cur_frame.clone();
-				}
+				display_frame = cur_frame.clone();
+				// if (c30){
+				// 	display_frame = cur_frame.clone();
+				// }
 
 				auto t2 = chrono::high_resolution_clock::now();	//time statistics
 				cap_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
@@ -552,7 +553,8 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 
 				} else if (roi_config == "opt-roi"){
 
-					cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
+					//cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
+					cv::resize(cur_frame, reduced_roi_frame, cv::Size(320, 240), 0, 0, cv::INTER_CUBIC );
 
 					if (frame_num < 2){
 						roi = r_filter.get_full_roi();
@@ -571,7 +573,8 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 
 				} else if (roi_config == "cont-roi") {
 					
-					cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
+					//cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
+					cv::resize(cur_frame, reduced_roi_frame, cv::Size(320, 240), 0, 0, cv::INTER_CUBIC );
 
 					if (frame_num < 2){
 						roi = r_filter.get_full_roi();
@@ -674,7 +677,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 		float cls_fps;
 
 		if (c30){
-			r_out = classes[output];
+			r_out = classes[adjusted_output];
 			a_out = classes[adjusted_output];
 			display_output = classes[adjusted_output];
 			display_roi = roi;
@@ -697,7 +700,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 			}
 		} else {
 			r_out = " ";
-			a_out = " ";
+			a_out = classes[adjusted_output];
 			acc_time += overall_time;
 			cls_fps = 0;
 		}
