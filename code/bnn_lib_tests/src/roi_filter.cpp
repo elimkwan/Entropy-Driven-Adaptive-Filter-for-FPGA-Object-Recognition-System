@@ -117,7 +117,7 @@ Rect Roi_filter::basic_roi(const Mat& mat){
     y1 = max_r.y;
     x2 = max_r.x + max_r.width;
     y2 = max_r.y + max_r.height;
-    cout << "size of contours poly: " << k << endl;
+    //cout << "size of contours poly: " << k << endl;
     if (k > 1){
         for(size_t i = 0 ; i < k - 2 ; i++){
         if (contours_poly[i].size() > 1){
@@ -194,14 +194,19 @@ Rect Roi_filter::enhanced_roi (const Mat& img){
 
     bounding_r = basic_roi(motion_mat);
 
+    //cout << "debug1" <<endl;
+
     int certainty = colour_similarity(small_bounding_r, hsv_motion_mat, 10);//sanity check
+    //cout << "debug2" <<endl;
+
+    // prev_mat = cur_mat.clone();
+    // prev_mat_grey = cur_mat_grey.clone();
 
     if (certainty == 0){
         bounding_r = past_roi;
-    } else {
+    } else{
         prev_mat = cur_mat.clone();
         prev_mat_grey = cur_mat_grey.clone();
-
     }
 
     //update past_roi
@@ -216,12 +221,12 @@ cv::Mat Roi_filter::simple_optical_flow(){
     cur = cur_mat_grey.clone();
     prev = prev_mat_grey.clone();
 
-    cout << "debug pot1" << endl;
+    //cout << "debug22" <<endl;
 
     Mat flow(prev.size(), CV_32FC2);
     calcOpticalFlowFarneback(prev, cur, flow, 0.5, 3, 15, 3, 5, 1.2, 0);
 
-    cout << "debug pot2" << endl;
+    //cout << "debug23" <<endl;
 
     // visualization
     Mat flow_parts[2];
@@ -231,7 +236,7 @@ cv::Mat Roi_filter::simple_optical_flow(){
 
     normalize(magn, magn_norm, 0.0f, 1.0f, NORM_MINMAX);
     angle *= ((1.f / 360.f) * (180.f / 255.f));
-    cout<<"breakpoint2.3"<<endl;
+    //cout<<"breakpoint2.3"<<endl;
 
     //build hsv image
     Mat _hsv[3], hsv, hsv8, bgr;
@@ -259,6 +264,8 @@ cv::Mat Roi_filter::simple_optical_flow(){
 int Roi_filter::colour_similarity(Rect r, const Mat& a, int n){
     //assume a is hsv image
 
+    srand(11); //set random seed for constant exp. result
+
     int centre_x, centre_y, ran_x, ran_y;
     unsigned char h,s,v, h2, s2, v2;
     vector<float> h_values, v_values;
@@ -267,8 +274,13 @@ int Roi_filter::colour_similarity(Rect r, const Mat& a, int n){
     int i = 0;
     int sign = 1;
     while(i < n){
+        //cout << "debug3" <<endl;
 
         //cout << "r width height" << int(r.width/4) << " " << int(r.height/4) <<endl;
+
+        if (int(r.width/4) == 0 || int(r.height/4) == 0){
+            return 0;
+        }
 
         ran_x = int(r.x + int(r.width/2) +  sign*rand()%(int(r.width/4)));
         ran_y = int(r.y + int(r.height/2) + sign*rand()%(int(r.height/4)));
@@ -276,6 +288,7 @@ int Roi_filter::colour_similarity(Rect r, const Mat& a, int n){
         //cout << "randx randy: " << ran_x << " " << ran_y << endl;
 
         Vec3b p2 = a.at<Vec3b>(ran_y,ran_x);
+        //cout << "debug4" <<endl;
 
         h2 = p2[0];
         v2 = p2[2];
@@ -294,7 +307,7 @@ int Roi_filter::colour_similarity(Rect r, const Mat& a, int n){
     h_en = entropy(h_values);
     v_en = entropy(v_values);
 
-    cout << "entropy of h and v: " << h_en << " " << v_en << endl;
+    //cout << "entropy of h and v: " << h_en << " " << v_en << endl;
 
     if (h_en <= 0.5 && v_en <= 1.0){
         return 2; //very certain
@@ -309,10 +322,14 @@ int Roi_filter::colour_similarity(Rect r, const Mat& a, int n){
 std::vector<float> Roi_filter::normalise(std::vector<float> &cp)
 {	
     int mx = *max_element(std::begin(cp), std::end(cp));
+
+    //cout << "debug-mx" << mx << endl;
+    if (mx == 0){
+        mx = 1;
+    }
     
     for(auto &elem : cp)
         elem = (float)elem / mx;
-    
     return cp;
 }
 

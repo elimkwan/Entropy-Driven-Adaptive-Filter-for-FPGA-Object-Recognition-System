@@ -12,12 +12,10 @@ void Win_filter::print_vector(std::vector<float> &vec)
 }
 
 vector<int> Win_filter::select_ws_wl(int mode){
-	if (mode == 0 || mode == 1 || mode == 2){
-		return {4,12};
-	} else if (mode == 3 || mode == 4){
-		return {8,12};
-	} else if (mode == 5) {
-		return {10, 12};
+	if (mode == 0 || mode == 1){
+		return {1,24};
+	} else if (mode == 5 || mode == 2 || mode == 3 || mode == 4 ){
+		return {4,24};
 	}
 }
 
@@ -39,8 +37,8 @@ unsigned int Win_filter::analysis(int mode, bool flex){
 			wcount = wstep; //set count to new step size
 			new_config = 1;
 		}
-
 		//cout << "new config, wcount, window step size and length: " << new_config << " " << wcount << " " << wstep << " " << wlength <<endl;
+		//cout << "flex window" <<endl;
 	}
 	
 	int num_histroy = wmemory.size();
@@ -51,6 +49,8 @@ unsigned int Win_filter::analysis(int mode, bool flex){
 	// }
 
 	int result_index = distance(wmemory[0].begin(), max_element(wmemory[0].begin(), wmemory[0].end()));
+
+	//cout << "wstep wcount wlength: " << wstep << " " << wcount << " " << wlength <<endl;
 
 	if (num_histroy <= wstep || num_histroy < wlength){
 		//not enough data for previous analysis, return real time data
@@ -102,7 +102,7 @@ unsigned int Win_filter::analysis(int mode, bool flex){
 
 //update result_history
 void Win_filter::update_memory(const std::vector<float> &class_result){
-	cout << "update memory" << endl;
+	//cout << "update memory" << endl;
     wmemory.insert(wmemory.begin(), Win_filter::calculate_certainty(class_result));
     if (wmemory.size() > max_wlength)
     {
@@ -167,4 +167,8 @@ void Win_filter::init_weights(float lambda){
 float Win_filter::expDecay(float lambda, int t, int N)
 {
 	return N * std::exp(-(lambda * t));
+}
+
+int Win_filter::getwstep(){
+	return wstep;
 }

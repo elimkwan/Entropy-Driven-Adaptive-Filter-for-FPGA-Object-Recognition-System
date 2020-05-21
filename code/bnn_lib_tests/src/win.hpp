@@ -36,6 +36,7 @@ class Win_filter{
         unsigned int analysis(int mode, bool flex);
         void init_weights(float lambda);
         void update_memory(const std::vector<float> &class_result);
+        int getwstep();
 };
 
 #endif
