@@ -1,55 +1,25 @@
+/******************************************************************************
+ * Code developed by Elim Kwan in April 2020 
+ *
+ * Region-Of-Interest Detection (ROI Filter)
+ * Detection ROI of Image with Contour Detection/Optical Flow/Hybrid of the two(eff-roi)
+ * 
+ *****************************************************************************/
 #include "roi_filter.hpp"
 
-// compare contour
-struct contour_sorter {
-    bool operator ()( const vector<Point>& a, const vector<Point> & b )
-    {
-        Rect ra(boundingRect(a));
-        Rect rb(boundingRect(b));
-        // scale factor for y should be larger than img.width
-        return ( (ra.x + 1000*ra.y) < (rb.x + 1000*rb.y) );
-    }
-};
-
-//helper func: for printing vector
-void Roi_filter::print_vector(std::vector<Point> &vec)
-{
-	std::cout << "{ ";
-	for(auto const &elem : vec)
-	{
-		std::cout << elem << " ";
-	}
-	std::cout << "}" <<endl;
-}
-
-Rect Roi_filter::naive_roi(const Mat& img, unsigned int roi_size){
-    if (roi_size == 0){
-        //return img
-        Rect R(Point(0,0), Point(frame_width, frame_height));
-        return R;
-
-    } else {
-
-        Rect R(Point((frame_width/2)-(roi_size/2), (frame_height/2)-(roi_size/2)), Point((frame_width/2)+(roi_size/2), (frame_height/2)+(roi_size/2)));
-        //return img(R);
-        return R;
-    }
-}
-
-Rect Roi_filter::get_past_roi(){
-    return past_roi;
-}
-
-Rect Roi_filter::get_full_roi(){
-    Rect R(Point(0,0), Point(frame_width, frame_height));
-    past_roi = R;
-    return R;
-}
+/*---------------------------------------------------------------------------
+-------------------------Contour Detection-----------------------------------
+---------------------------------------------------------------------------*/
 
 Rect Roi_filter::basic_roi(const Mat& mat){
+/*
+	Apply contour detection to the input images. 
+    Generate a bounding box on the contour found. 
+    Add offset to ROI and snap to edges if neccessary. 
 
-    // Rect R(Point(0,0), Point(frame_width, frame_height));
-    // return R;
+    @param mat: Current Frame
+    :return: Rectangle indicating the ROI
+*/
 
     cv::Mat cur = mat.clone();
 
@@ -86,7 +56,6 @@ Rect Roi_filter::basic_roi(const Mat& mat){
     findContours(canny_mat, contours, CV_RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
     int num_of_contours = contours.size();
-    //cout << "how many contours: " << num_of_contours << endl;
 
     if (contours.size() <= 0){
         cout << "---Too dark to extract contours--" << endl;
@@ -100,9 +69,7 @@ Rect Roi_filter::basic_roi(const Mat& mat){
     for( size_t i = 0; i < contours.size(); i++ )
     {
         approxPolyDP( contours[i], contours_poly[i], 3, true );
-        //cout << "---debug opencv 6 --" << endl;
     }
-    //cout << "---debug opencv 7 --" << endl;
     if (contours_poly.size() <= 0){
         //too dark cant extract any contours
         return get_full_roi();
@@ -117,7 +84,6 @@ Rect Roi_filter::basic_roi(const Mat& mat){
     y1 = max_r.y;
     x2 = max_r.x + max_r.width;
     y2 = max_r.y + max_r.height;
-    //cout << "size of contours poly: " << k << endl;
     if (k > 1){
         for(size_t i = 0 ; i < k - 2 ; i++){
         if (contours_poly[i].size() > 1){
@@ -147,6 +113,14 @@ Rect Roi_filter::basic_roi(const Mat& mat){
 }
 
 Rect Roi_filter::expand_r(int x1, int y1, int x2, int y2, float p){
+/*
+	Add offset to the detected ROI.
+    Snap rectangle to edge if they are invalid edges. (Error Prevention)
+
+	@param x1,y1,x2,y2: x, y coordinate of the primary ROI
+    @param p: arbitary offset to be added to the primary ROI
+    :return: Rectangle indicating the ROI
+*/
     
     int a = x1 - x1*p;
     int b = y1 - y1*p;
@@ -173,8 +147,16 @@ Rect Roi_filter::expand_r(int x1, int y1, int x2, int y2, float p){
     return R;
 }
 
+/*---------------------------------------------------------------------------
+-------------------------Optical Flow----------------------------------------
+---------------------------------------------------------------------------*/
 void Roi_filter::init_enhanced_roi(const Mat& img){
-    //cout<<"initialising enhanced roi filter"<<endl;
+/*
+	Optical Flow detection algorithms compares consecutive frames. 
+    Hence, this func stores input image as prevous_mat, preparing for possible comparision for the next frame. 
+
+	@param mat: Current Frame
+*/
     cv::Mat grey_mat;
     prev_mat = img.clone();
     cvtColor(img,grey_mat, COLOR_BGR2GRAY);
@@ -182,6 +164,12 @@ void Roi_filter::init_enhanced_roi(const Mat& img){
 }
 
 Rect Roi_filter::enhanced_roi (const Mat& img){
+/*
+	Main wrapper function for using Optical Flow algorithms to generate ROI.
+    Process: Optical Flow Algo to generate motion map -> Edge Detection on motion map -> Colour Similarity Check as Sanity Check
+
+	@param img: Current Frame
+*/
     cv::Mat grey;
     cur_mat = img.clone();
     cvtColor(img, grey, COLOR_BGR2GRAY);
@@ -194,13 +182,7 @@ Rect Roi_filter::enhanced_roi (const Mat& img){
 
     bounding_r = basic_roi(motion_mat);
 
-    //cout << "debug1" <<endl;
-
     int certainty = colour_similarity(small_bounding_r, hsv_motion_mat, 10);//sanity check
-    //cout << "debug2" <<endl;
-
-    // prev_mat = cur_mat.clone();
-    // prev_mat_grey = cur_mat_grey.clone();
 
     if (certainty == 0){
         bounding_r = past_roi;
@@ -216,17 +198,19 @@ Rect Roi_filter::enhanced_roi (const Mat& img){
 }
 
 cv::Mat Roi_filter::simple_optical_flow(){
+/*
+	Dense Optical Flow Algo with reference to OpenCv documentation (https://docs.opencv.org/3.4/d4/dee/tutorial_optical_flow.html)
+    Colour represent the direction of mation, Intensity represent the magnitude of the motion.
+
+	:return: Motion Map
+*/
 
     cv::Mat cur, prev;
     cur = cur_mat_grey.clone();
     prev = prev_mat_grey.clone();
 
-    //cout << "debug22" <<endl;
-
     Mat flow(prev.size(), CV_32FC2);
     calcOpticalFlowFarneback(prev, cur, flow, 0.5, 3, 15, 3, 5, 1.2, 0);
-
-    //cout << "debug23" <<endl;
 
     // visualization
     Mat flow_parts[2];
@@ -236,7 +220,6 @@ cv::Mat Roi_filter::simple_optical_flow(){
 
     normalize(magn, magn_norm, 0.0f, 1.0f, NORM_MINMAX);
     angle *= ((1.f / 360.f) * (180.f / 255.f));
-    //cout<<"breakpoint2.3"<<endl;
 
     //build hsv image
     Mat _hsv[3], hsv, hsv8, bgr;
@@ -250,20 +233,20 @@ cv::Mat Roi_filter::simple_optical_flow(){
 
     cvtColor(hsv8, bgr, COLOR_HSV2BGR);
 
-    // if (bgr.empty()){
-    //     cout << "motion map is empty" <<endl;
-    // } else {
-    //     //cout << "Optical = " << endl << " " << bgr << endl << endl;
-    //     imshow("Dense optical flow", bgr);
-    //     waitKey(0);
-    // }
-
     return bgr;
 }
 
 int Roi_filter::colour_similarity(Rect r, const Mat& a, int n){
-    //assume a is hsv image
+/*
+	Motion Map with a single moving object in frame will show a clustor of pixels with similar colour. Otherwise, if there is no motion, it will show random colours.
+    By comparing the HSV values of pixels within the detected ROI, we can estimate how likely there are motion, and if the ROI detected contains the moving object.
+    As Sanity Check. 
 
+    @param r: ROI detected from Edge Detection on Motion Map
+    @param a: Motion Map (assume it is hsv image)
+    @param n: Number of pixels to be checked
+	:return: integer indicating level of certainty of the motion map is representing a moving object, not just random colour
+*/
     srand(11); //set random seed for constant exp. result
 
     int centre_x, centre_y, ran_x, ran_y;
@@ -274,9 +257,6 @@ int Roi_filter::colour_similarity(Rect r, const Mat& a, int n){
     int i = 0;
     int sign = 1;
     while(i < n){
-        //cout << "debug3" <<endl;
-
-        //cout << "r width height" << int(r.width/4) << " " << int(r.height/4) <<endl;
 
         if (int(r.width/4) == 0 || int(r.height/4) == 0){
             return 0;
@@ -285,14 +265,10 @@ int Roi_filter::colour_similarity(Rect r, const Mat& a, int n){
         ran_x = int(r.x + int(r.width/2) +  sign*rand()%(int(r.width/4)));
         ran_y = int(r.y + int(r.height/2) + sign*rand()%(int(r.height/4)));
 
-        //cout << "randx randy: " << ran_x << " " << ran_y << endl;
-
         Vec3b p2 = a.at<Vec3b>(ran_y,ran_x);
-        //cout << "debug4" <<endl;
 
         h2 = p2[0];
         v2 = p2[2];
-        //cout << "random pt colour :" << p2 << endl;
 
         h_values.push_back(h2);
         v_values.push_back(v2);
@@ -307,8 +283,6 @@ int Roi_filter::colour_similarity(Rect r, const Mat& a, int n){
     h_en = entropy(h_values);
     v_en = entropy(v_values);
 
-    //cout << "entropy of h and v: " << h_en << " " << v_en << endl;
-
     if (h_en <= 0.5 && v_en <= 1.0){
         return 2; //very certain
     } else if (h_en <= 0.5){
@@ -319,11 +293,15 @@ int Roi_filter::colour_similarity(Rect r, const Mat& a, int n){
 
 }
 
-std::vector<float> Roi_filter::normalise(std::vector<float> &cp)
-{	
+std::vector<float> Roi_filter::normalise(std::vector<float> &cp){
+/*
+	Normalisation Func
+
+    @param cp: array
+	:return: normalised array
+*/
     int mx = *max_element(std::begin(cp), std::end(cp));
 
-    //cout << "debug-mx" << mx << endl;
     if (mx == 0){
         mx = 1;
     }
@@ -333,12 +311,66 @@ std::vector<float> Roi_filter::normalise(std::vector<float> &cp)
     return cp;
 }
 
-float Roi_filter::entropy(std::vector<float> &arg_vec)
-{
+float Roi_filter::entropy(std::vector<float> &arg_vec){
+/*
+	Entropy Func
+
+    @param cp: array
+	:return: an integer representing the entropy of the distribution
+*/
     float sum = 0;
     for(auto const &elem : arg_vec){
         sum += elem * std::log2(1/elem);
     }
-    //cout << "uncertainty: " << sum <<endl;
     return sum;
+}
+
+/*---------------------------------------------------------------------------
+-------------------------Others Func----------------------------------------
+---------------------------------------------------------------------------*/
+Rect Roi_filter::naive_roi(const Mat& img, unsigned int roi_size){
+/*
+	ROI Detection from previous system: return center part of the image as roi
+
+	@param img: Frame
+    @param roi_size: ROI size
+    :return: Rectangle indicating the ROI
+*/
+    Rect R(Point((frame_width/2)-(roi_size/2), (frame_height/2)-(roi_size/2)), Point((frame_width/2)+(roi_size/2), (frame_height/2)+(roi_size/2)));
+    return R;
+}
+
+Rect Roi_filter::get_past_roi(){
+/*
+	Return ROI result of the previous frame
+
+    :return: Rectangle indicating the ROI
+*/
+    return past_roi;
+}
+
+Rect Roi_filter::get_full_roi(){
+/*
+	Return the full frame as ROI
+
+    :return: Rectangle indicating the ROI
+*/
+    Rect R(Point(0,0), Point(frame_width, frame_height));
+    past_roi = R;
+    return R;
+}
+
+void Roi_filter::print_vector(std::vector<Point> &vec)
+{
+/*
+	Helper func for printing vector
+
+	@param &vec: Vector to be printed
+*/
+	std::cout << "{ ";
+	for(auto const &elem : vec)
+	{
+		std::cout << elem << " ";
+	}
+	std::cout << "}" <<endl;
 }

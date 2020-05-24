@@ -50,11 +50,17 @@ win.o: $(SRC_DIR)/win.cpp $(SRC_DIR)/win.hpp
 roi_filter.o: $(SRC_DIR)/roi_filter.cpp $(SRC_DIR)/roi_filter.hpp
 	$(CXX) -c $(SRC_DIR)/roi_filter.cpp $(LIBS) -std=c++14 -fopenmp -DXILINX -DOFFLOAD  -march=armv7-a -I $(SRC_DIR) -mfloat-abi=hard 
 
-BNN: $(SOURCE) foldedmv-offload.o rawhls-offload.o win.o roi_filter.o
-	$(CXX) -o $@ $< foldedmv-offload.o rawhls-offload.o win.o roi_filter.o $(LIBS) $(XI_CFLAGS) $(XI_LDFLAGS)  $(LDFLAGS)
+uncertainty.o: $(SRC_DIR)/uncertainty.cpp $(SRC_DIR)/uncertainty.hpp
+	$(CXX) -c $(SRC_DIR)/uncertainty.cpp $(LIBS) -std=c++14 
+
+BNN: $(SOURCE) foldedmv-offload.o rawhls-offload.o win.o roi_filter.o uncertainty.o
+	$(CXX) -o $@ $< foldedmv-offload.o rawhls-offload.o win.o roi_filter.o uncertainty.o $(LIBS) $(XI_CFLAGS) $(XI_LDFLAGS)  $(LDFLAGS)
 
 clean-all:
 	rm -f  $(XI_PROGs) foldedmv-offload.o rawhls-offload.o win.o roi_filter.o
 
+clean-data:
+	rm -f  ./experiments/dataset/*.png result.csv
+
 clean:
-	rm -f  $(XI_PROGs) roi_filter.o
+	rm -f  $(XI_PROGs) win.o uncertainty.o roi_filter.o
