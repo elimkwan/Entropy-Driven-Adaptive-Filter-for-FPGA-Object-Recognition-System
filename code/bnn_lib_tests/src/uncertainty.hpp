@@ -1,3 +1,10 @@
+/******************************************************************************
+ * Code developed by Elim Kwan in April 2020 
+ *
+ * Uncertainty Estimation (Uncertainty Filter)
+ * Calculate uncertainty in BNN output with: Entropy, Variance, AutoCorrelation 
+ * 
+ *****************************************************************************/
 #ifndef uncertainty
 #define uncertainty
 #include <iostream>
@@ -25,21 +32,6 @@ class Uncertainty{
         double __alpha; 
         std::vector<std::vector<double>> __corr_history;
         std::vector<double> __running_corr;
-
-        // std::vector<double> __class0_buf;
-        // std::vector<double> __class1_buf;
-        // std::vector<double> __class2_buf;
-        // std::vector<double> __class3_buf;
-        // std::vector<double> __class4_buf;
-        // std::vector<double> __class5_buf;
-        // std::vector<double> __class6_buf;
-        // std::vector<double> __class7_buf;
-        // std::vector<double> __class8_buf;
-        // std::vector<double> __class9_buf;
-        // std::vector<double> __c_dataSum;
-        // std::vector<double> __c_rolling_mean;
-        // std::vector<double> __c_rolling_sd;
-
 
         void print_vector(std::vector<double> &vec);
         std::vector<double> normalise(std::vector<double> &cp);

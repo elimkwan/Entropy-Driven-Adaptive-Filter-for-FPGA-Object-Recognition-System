@@ -40,7 +40,10 @@
  *
  *****************************************************************************/
 
-/*
+/******************************************************************************
+
+ 	Code developed by Elim Kwan in April 2020, modified from Xilinx and Musab Code
+
 	Uses webcam input for classification
 
 	Command avaliable:
@@ -60,8 +63,8 @@
 
 	./BNN 500 en drop flexw eff-roi dynclk nbase 4
 
-
-*/
+ *
+ *****************************************************************************/
 
 #include "../tiny_cnn/tiny_cnn.h"
 #include "../tiny_cnn/util/util.h"
@@ -287,6 +290,7 @@ int main(int argc, char** argv)
 
 	@param argc: number of input arguements
 	@param argv: vector of input arguements
+	:return: an integer
 */
 	for(int i = 0; i < argc; i++)
 		cout << "argv[" << i << "]" << " = " << argv[i] << endl;	
@@ -387,6 +391,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 	@param dynclk: Choose whether to use dynamica PL clock - [True False]
 	@param expected_class: Choose the expected in-frame object for accuracy calculation [0 ... 9]
 	@param base: Choose whether to adopt base case setting - [True False]
+	:return: an integer
 
 */
 

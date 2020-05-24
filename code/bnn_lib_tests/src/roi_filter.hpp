@@ -1,13 +1,15 @@
+/******************************************************************************
+ * Code developed by Elim Kwan in April 2020 
+ *
+ * Region-Of-Interest Detection (ROI Filter)
+ * Detection ROI of Image with Contour Detection/Optical Flow/Hybrid of the two(eff-roi)
+ * 
+ *****************************************************************************/
 #ifndef roi_filter
 #define roi_filter
 #include "opencv2/opencv.hpp"
 #include <iostream>
 #include <fstream>
-// #include "opencv2/core.hpp"
-// #include <opencv2/highgui.hpp>
-// #include <opencv2/imgproc.hpp>
-// #include <opencv2/videoio.hpp>
-// #include <opencv2/video.hpp>
 
 using namespace cv;
 using namespace std;
@@ -47,7 +49,6 @@ class Roi_filter{
         Rect enhanced_roi (const Mat& img);
         Rect get_past_roi();
         Rect get_full_roi();
-        //void update_enhanced_roi_param(const Mat& img);
     
 };
 

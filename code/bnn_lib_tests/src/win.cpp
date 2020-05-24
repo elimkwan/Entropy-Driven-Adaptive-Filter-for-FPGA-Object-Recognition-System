@@ -1,28 +1,23 @@
+/******************************************************************************
+ * Code developed by Elim Kwan in April 2020 
+ *
+ * Window Filter
+ * Generate aggregates of classification results.
+ * Step Size and Length of Filter can be varied.
+ * 
+ *****************************************************************************/
 #include "win.hpp"
 
-//helper func: for printing vector
-void Win_filter::print_vector(std::vector<float> &vec)
-{
-	std::cout << "{ ";
-	for(auto const &elem : vec)
-	{
-		std::cout << elem << " ";
-	}
-	std::cout << "}" <<endl;
-}
-
-vector<int> Win_filter::select_ws_wl(int mode){
-	if (mode == 0 || mode == 1){
-		return {1,24};
-	} else if (mode == 5 || mode == 2 || mode == 3 || mode == 4 ){
-		return {4,24};
-	}
-}
-
-//return the adjusted output
 unsigned int Win_filter::analysis(int mode, bool flex){
-    //win_step, step_counts, past_output, results_history, weights
-    //cout << "output filer starts here ..." << endl;
+/*
+	Main Wrapper function of the Window Filter. 
+	Stored recent classification result(the array class_result)and calculated the aggregate values based on that.
+	Final adjusted output = Position of max element in aggregated class_result array. 
+
+	@param mode: represents the level of uncertainty in data, depending on mode, various window filter configurations will be adopted if flex window setting is true
+    @param flex: determines whether flex window filter setting is used.
+    :return result_index: an integer representing a class(the adjusted output)
+*/
 	
 	if (flex){
 		unsigned int old_wstep = wstep;
@@ -37,46 +32,21 @@ unsigned int Win_filter::analysis(int mode, bool flex){
 			wcount = wstep; //set count to new step size
 			new_config = 1;
 		}
-		//cout << "new config, wcount, window step size and length: " << new_config << " " << wcount << " " << wstep << " " << wlength <<endl;
-		//cout << "flex window" <<endl;
 	}
 	
 	int num_histroy = wmemory.size();
 
-	// for (int i = 0; i < wmemory.size(); i++)
-	// {
-	// 	print_vector(wmemory[i]);
-	// }
-
 	int result_index = distance(wmemory[0].begin(), max_element(wmemory[0].begin(), wmemory[0].end()));
-
-	//cout << "wstep wcount wlength: " << wstep << " " << wcount << " " << wlength <<endl;
 
 	if (num_histroy <= wstep || num_histroy < wlength){
 		//not enough data for previous analysis, return real time data
-		//cout << "outputing real time data" << endl;
-		//std::cout << "arg_count: " << arg_count << std::endl;
-		//std::cout << "arg_results_history" << std::endl;
-		// for (int i = 0; i < arg_results_history.size(); i++)
-		// {
-		// 	print_vector(arg_results_history[i]);
-		// }
-
-		//std::vector<float> current_result = arg_results_history[arg_count];
-		//float result_value = 0.00f;
-		//result_value = std::max_element(current_result.begin(), current_result.end());
-		//std::cout << "real time data results index: " << result_index << std::endl;
-		//print_vector(arg_results_history[0]);
 		return result_index;
 	}
 
 	if (wcount < wstep){
-		//cout << "outputing wcount < wstep data" << endl;
         wcount++;
 		return wpast_output;
 	} else if ( wcount == wstep){
-
-		//cout << "outputing wcount == wstep, current analysised result" << endl;
 		std::vector<float> adjusted_results(10, 0);
 		for(int i = 0; i < wlength; i++)
 		{ 
@@ -93,16 +63,19 @@ unsigned int Win_filter::analysis(int mode, bool flex){
 		return adjusted_output;
 	}
 
-	//cout << "should not end up here - output non adjusted data as replacement" << endl;
+	//Error
 	return result_index;
 }
 
 
 
-
-//update result_history
 void Win_filter::update_memory(const std::vector<float> &class_result){
-	//cout << "update memory" << endl;
+/*
+	Update result_history
+
+	@para class_result: result of the cuurent frame, to be inserted to the history array
+*/
+	
     wmemory.insert(wmemory.begin(), Win_filter::calculate_certainty(class_result));
     if (wmemory.size() > max_wlength)
     {
@@ -110,21 +83,20 @@ void Win_filter::update_memory(const std::vector<float> &class_result){
     }
 }
 
+vector<float> Win_filter::calculate_certainty(const std::vector<float> &arg_vec){
 /*
-	Calculate certainty
+	Calculate the aggregates
 
 	@para arg_vec: input vector with floating points
-	@return vector [e^(class1 probability)/sum, e^(class2 probability)/sum... e^(class10 probability)/sum], where sum = summation of e^(class probability) of all the classes
+	:return: vector [e^(class1 probability)/sum, e^(class2 probability)/sum... e^(class10 probability)/sum], where sum = summation of e^(class probability) of all the classes
 */
-vector<float> Win_filter::calculate_certainty(const std::vector<float> &arg_vec)
-{
+
 	// Normalise the vector
     std::vector<float> norm_vec(arg_vec.begin(), arg_vec.end());
 	int mx_n = *max_element(std::begin(norm_vec), std::end(norm_vec));
 	for(auto &elem : norm_vec)
 		elem = (float)elem / mx_n;
 
-	//std::vector<float> norm_vec = normalise(arg_vec);
 	float mx = *max_element(std::begin(norm_vec), std::end(norm_vec));
 	float sum = 0;
 	for(auto const &elem : norm_vec)
@@ -142,21 +114,12 @@ vector<float> Win_filter::calculate_certainty(const std::vector<float> &arg_vec)
 	return norm_vec;
 }
 
-// std::vector<float> Win_filter::normalise(std::vector<float> &vec)
-// {	
-// 	std::vector<float> cp(vec.begin(), vec.end());
-// 	int mx = *max_element(std::begin(cp), std::end(cp));
-	
-// 	for(auto &elem : cp)
-// 		elem = (float)elem / mx;
-	
-// 	return cp;
-// }
-
-
-
-//initialising weights
 void Win_filter::init_weights(float lambda){
+/*
+	Initialise weights of Window Filter
+
+	@param lambda: set to 0.2 (parameters probed by Musab)
+*/
     for(int i = 0; i < max_wlength; i++)
 	{
 		wweights[i] = expDecay(lambda, i);
@@ -164,11 +127,51 @@ void Win_filter::init_weights(float lambda){
 	}
 }
 
-float Win_filter::expDecay(float lambda, int t, int N)
-{
+float Win_filter::expDecay(float lambda, int t, int N){
+/*
+	Exponential Decay Function
+
+	@param lambda: set to 0.2 (parameters probed by Musab)
+	@param t: event time unit
+	@param N: default to 1 (another arbitary parameter that is not used)
+	:return: the y value of the exponential decay curve given x (event time)
+*/
 	return N * std::exp(-(lambda * t));
 }
 
 int Win_filter::getwstep(){
+/*
+	Return window step size
+
+	:return wstep: step size of window filter
+*/
 	return wstep;
+}
+
+vector<int> Win_filter::select_ws_wl(int mode){
+/*
+	Return window filter configuration depending on current mode (for flex window feature)
+
+	:return: window step size and length respectively
+*/
+	if (mode == 0 || mode == 1){
+		return {1,24};
+	} else if (mode == 5 || mode == 2 || mode == 3 || mode == 4 ){
+		return {4,24};
+	}
+}
+
+void Win_filter::print_vector(std::vector<float> &vec)
+{
+/*
+	Printing vector
+
+	@param &vec: Vector to be printed
+*/
+	std::cout << "{ ";
+	for(auto const &elem : vec)
+	{
+		std::cout << elem << " ";
+	}
+	std::cout << "}" <<endl;
 }

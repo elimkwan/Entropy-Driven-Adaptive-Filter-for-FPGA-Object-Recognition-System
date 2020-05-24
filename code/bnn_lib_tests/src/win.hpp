@@ -1,3 +1,11 @@
+/******************************************************************************
+ * Code developed by Elim Kwan in April 2020 
+ *
+ * Window Filter
+ * Generate aggregates of classification results.
+ * Step Size and Length of Filter can be varied.
+ * 
+ *****************************************************************************/
 #ifndef win
 #define win
 #include <iostream>
@@ -11,7 +19,6 @@ class Win_filter{
     private:
         void print_vector(std::vector<float> &vec);
         float expDecay(float lambda, int t, int N = 1); //supporting math functions
-        //std::vector<float> normalise(std::vector<float> &vec); //supporting math functions
         vector<float> calculate_certainty(const std::vector<float> &arg_vec); //supporting math functions
         vector<int> select_ws_wl(int mode);
 
