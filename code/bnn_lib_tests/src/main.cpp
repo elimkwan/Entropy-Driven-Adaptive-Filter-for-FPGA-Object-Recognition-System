@@ -568,8 +568,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 
 				} else if (roi_config == "opt-roi"){
 
-					//cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
-					cv::resize(cur_frame, reduced_roi_frame, cv::Size(320, 240), 0, 0, cv::INTER_CUBIC );
+					cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
 
 					if (frame_num < 2){
 						roi = r_filter.get_full_roi();
@@ -588,8 +587,7 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dr
 
 				} else if (roi_config == "cont-roi") {
 					
-					//cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
-					cv::resize(cur_frame, reduced_roi_frame, cv::Size(320, 240), 0, 0, cv::INTER_CUBIC );
+					cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
 
 					if (frame_num < 2){
 						roi = r_filter.get_full_roi();
