@@ -63,4 +63,4 @@ clean-data:
 	rm -f  ./experiments/dataset/*.png result.csv
 
 clean:
-	rm -f  $(XI_PROGs) win.o uncertainty.o roi_filter.o
+	rm -f  $(XI_PROGs) uncertainty.o win.o
