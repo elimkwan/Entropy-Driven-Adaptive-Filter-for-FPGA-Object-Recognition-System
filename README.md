@@ -124,3 +124,4 @@ Run the experiment with the following command:
 
 ## Other options
 Region-of-Interst code is also embedded in the file. Users can change the roi_config in the main files from "full-roi" to "opt-roi", "cont-roi","eff-roi", which correspond to optical flow detection, contour detection and hybrid of the two
+
