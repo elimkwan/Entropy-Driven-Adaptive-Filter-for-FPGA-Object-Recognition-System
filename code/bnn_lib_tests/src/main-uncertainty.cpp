@@ -50,7 +50,7 @@
 	Output Log Directory: ../experiments/result/result-overview.csv
 
 	Command Avaliable:
-	./BNN
+	./UncertaintyExp
 
  *
  *****************************************************************************/

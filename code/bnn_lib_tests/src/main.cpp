@@ -49,7 +49,7 @@
 	Command avaliable:
 	./BNN [No. of frame] [Schemes] [Expected Class]
 	[No. of frame]: number of frames to be Captured
-	[Schemes]: either A/B/C, adaptive filtering schemes to be applied, with A being most accurate and C most resources efficient
+	[Schemes]: either A/B/C/base, adaptive filtering schemes to be applied, with A being most accurate and C most resources efficient, base refer to the base model
 	[Expected Class]: Enter the expected classification results, for analysing the system accuracy.
 
 	Example: "./BNN 500 A 4" means capture 500 frames, and apply scheme A for adaptive filter, expecting the input to be deer

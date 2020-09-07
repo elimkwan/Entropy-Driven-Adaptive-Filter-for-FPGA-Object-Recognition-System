@@ -53,9 +53,9 @@
 	Output Log Directory: ../experiments/result/result-overview.csv
 
 	Command Avaliable:
-	For Scheme A : ./BNN 1 1 10 15 12 15 1 10 10 13 
-	For Scheme B : ./BNN 1 1 15 15 15 12 15 10 10 8
-	For Scheme C : ./BNN 1 1 10 8 15 12 15 10 10 6
+	For Scheme A : ./AdaptiveFilExp 1 1 10 15 12 15 1 10 10 13 
+	For Scheme B : ./AdaptiveFilExp 1 1 15 15 15 12 15 10 10 8
+	For Scheme C : ./AdaptiveFilExp 1 1 10 8 15 12 15 10 10 6
 	Self-specified Scheme: ./BNN SS-1 WL-1 SS-2 WL-2 SS-3 WL-3 SS-4 WL-4 SS-5 WL-5 (Replace the numbers with your own StepSize and WindowLength Sets)
 
  *
