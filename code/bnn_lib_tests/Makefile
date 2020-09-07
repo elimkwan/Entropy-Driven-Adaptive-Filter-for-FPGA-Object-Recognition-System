@@ -24,9 +24,12 @@ LDFLAGS = -pthread -lpthread -z muldefs
 
 XI_LDFLAGS+= -lrt -lkernelbnn 
 
-XI_PROGs= BNN
+XI_PROGs= BNN WindowFilExp UncertaintyExp AdaptiveFilExp
 
 SOURCE= $(SRC_DIR)/main.cpp   $(SRC_DIR)/kernelbnn.h
+SOURCE1= $(SRC_DIR)/main-windowfil.cpp
+SOURCE2= $(SRC_DIR)/main-uncertainty.cpp
+SOURCE3= $(SRC_DIR)/main-adaptivefil.cpp
 
 # OpenCV variables
 OPENCV = `pkg-config opencv --cflags --libs`
@@ -56,11 +59,14 @@ uncertainty.o: $(SRC_DIR)/uncertainty.cpp $(SRC_DIR)/uncertainty.hpp
 BNN: $(SOURCE) foldedmv-offload.o rawhls-offload.o win.o roi_filter.o uncertainty.o
 	$(CXX) -o $@ $< foldedmv-offload.o rawhls-offload.o win.o roi_filter.o uncertainty.o $(LIBS) $(XI_CFLAGS) $(XI_LDFLAGS)  $(LDFLAGS)
 
-clean-all:
-	rm -f  $(XI_PROGs) foldedmv-offload.o rawhls-offload.o win.o roi_filter.o
+WindowFilExp: $(SOURCE1) foldedmv-offload.o rawhls-offload.o win.o roi_filter.o uncertainty.o
+	$(CXX) -o $@ $< foldedmv-offload.o rawhls-offload.o win.o roi_filter.o uncertainty.o $(LIBS) $(XI_CFLAGS) $(XI_LDFLAGS)  $(LDFLAGS)
 
-clean-data:
-	rm -f  ./experiments/dataset/*.png result.csv
+UncertaintyExp: $(SOURCE2) foldedmv-offload.o rawhls-offload.o win.o roi_filter.o uncertainty.o
+	$(CXX) -o $@ $< foldedmv-offload.o rawhls-offload.o win.o roi_filter.o uncertainty.o $(LIBS) $(XI_CFLAGS) $(XI_LDFLAGS)  $(LDFLAGS)
+
+AdaptiveFilExp: $(SOURCE3) foldedmv-offload.o rawhls-offload.o win.o roi_filter.o uncertainty.o
+	$(CXX) -o $@ $< foldedmv-offload.o rawhls-offload.o win.o roi_filter.o uncertainty.o $(LIBS) $(XI_CFLAGS) $(XI_LDFLAGS)  $(LDFLAGS)
 
 clean:
-	rm -f  $(XI_PROGs) win.o uncertainty.o roi_filter.o
+	rm -f  $(XI_PROGs) foldedmv-offload.o rawhls-offload.o win.o roi_filter.o uncertainty.o

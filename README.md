@@ -1,22 +1,16 @@
 # RealTimeObjectRecognition
-Work Progress is documented at: https://gist.github.com/elimkwan/291b4fa29cfe936bcdbcf21526b5c6a8
-
-
-This program is for Real Time Object Recognition with Binary Neural Network on FPGA. Our main contribution is appending pre and post processing modules to customise the system to be more adaptive, this includes:
+This program is for Real Time Object Recognition with Binary Neural Network on FPGA. Our main contribution is appending an Entropy driven Adaptive Filter for a more accurate and resources efficient system. This includes:
 - Entropy-based Uncertainty Estimation {*uncertainty.cpp*}
-- Window Filter with variable step size and length {*win.cpp*}
+- Window Filter with variable step size and length {*win.cpp*} which changes dynamically based on level of uncertainty in data. Enabling us to decimate frames as well
 - Region-Of-Interest(ROI) Detection with Optical Flow and Contour Detection {*roi_filter.cpp*}
-- Power-Saving Features {*main.cpp*}
-    * Decimate frames
+- Other possible power-saving features by altering configurations in {*main.cpp*, *main-adaptivefil.cpp*, *main-uncertainty.cpp*, *main-windowfil.cpp*}
     * Dynamic clock
-    * Flexible Window Filter - alternate between varies step size based on level of uncertainty in data
     * ROI Filter - alternate between Optical Flow, Contour Detection and Reuse Past ROI based on level of uncertainty in data
 
 
 ## Folder Architecture:
 - *code/bnn_lib_tests/Makefile* is the Makefile
 - *code/bnn_lib_tests/src/\** contains all the active sources files
-- *code/bnn_lib_tests/all-main-cpp/\** contains all the cpp scripts for testing
 - *code/bnn_lib_tests/experiments/results* is the directory for active test results
 - *code/bnn_lib_tests/experiments/images* is the directory for active dataset
 - *testing/data/* contains all 12 datasets
@@ -47,46 +41,86 @@ password: xilinx
 /home/xilinx/: cp .Xauthority /root/
 /home/xilinx/jose_bnn/: echo kernelbnn.linked.bit.bin > /sys/class/fpga_manager/fpga0/firmware
 ```
-- Then in the bnnlibtests folder, run “make clean” or “make clean-all”, make clean will allow a faster, less than 60-second build.  Then, run “make”.
+- Then in the bnnlibtests folder, run “make clean all"
+Upon compiling the program with the Makefile, 4 executables can be called: BNN, WindowFilExp,UncertaintyExp, AdaptiveFilExp.
 
 ---
-## Example 1: With Webcam Input
-
-Upon compiling the program with the Makefile, a BNN executable can be called with following arguements:
-```
-./BNN [No. of Frame] [Uncertainty Scheme] [Window Filter Scheme] [ROI Filter Scheme] [Dynmic Clock] [Base Case] [Expected Class]
-```
-
-Command for proposed scheme:
-The program will process 500 frames, with entropy-based analysis, dropping frames, uses flexible window filter, uses flexible ROI filter, uses dynamic clock and not a based case, with expected class equals to 4
-```
-./BNN 500 en drop flexw eff-roi dynclk nbase 4
-```
-
-Other combinations:
-```
-./BNN 500 na notdrop notflexw full-roi ndynclk base 4
-./BNN 500 en notdrop notflexw full-roi ndynclk nbase 4
-./BNN 500 en notdrop notflexw opt-roi ndynclk nbase 4
-./BNN 500 en notdrop notflexw cont-roi ndynclk nbase 4
-./BNN 500 en notdrop notflexw eff-roi ndynclk nbase 4
-./BNN 500 en notdrop flexw eff-roi ndynclk nbase 4
+## Case 1: With Webcam Input
 
 
-./BNN 500 en drop notflexw full-roi ndynclk nbase 4
-./BNN 500 en drop notflexw opt-roi ndynclk nbase 4
-./BNN 500 en drop notflexw cont-roi ndynclk nbase 4
-./BNN 500 en drop notflexw eff-roi ndynclk nbase 4
-./BNN 500 en drop flexw eff-roi ndynclk nbase 4
+Uses webcam input for classification. Classify it as one of the ten classes ("airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck")
+
+Command avaliable:
+./BNN [No. of frame] [Schemes] [Expected Class]
+[No. of frame]: number of frames to be Captured
+[Schemes]: either A/B/C/base, adaptive filtering schemes to be applied, with A being most accurate and C most resources efficient
+[Expected Class]: Enter the expected classification results, for analysing the system accuracy.
+
+Example 1: 
+``` 
+./BNN 500 A 4
+```
+The command means capture 500 frames, and apply scheme A for adaptive filter, expecting the input to be deer
+
+Example 2: 
+``` 
+./BNN 500 base 1
+```
+The command means capture 500 frames, and apply base model for adaptive filter, expecting the input to be automobile
+
+
+## Case 2: With Video Dataset as Input
+
+Experiment for analysing the performance of different adaptive filter schemes under different scenarios.
+Scheme A is optimised for accuracy.
+Scheme B is optimised for accuracy and efficiency.
+Scheme C is optimised for accuracy and efficiency with more aggressive computational savings.
+Dataset is used instead of the webcam.
+Dataset Directory: ../experiments/DatasetX (X ranges from 1 - 5)
+Output Log Directory: ../experiments/result/result-overview.csv
+
+For Scheme A :
+```
+./AdaptiveFilExp 1 1 10 15 12 15 1 10 10 13 
+```
+For Scheme B :
+```
+./AdaptiveFilExp 1 1 15 15 15 12 15 10 10 8
+```
+For Scheme C :
+```
+./AdaptiveFilExp 1 1 10 8 15 12 15 10 10 6
 ```
 
----
-## Example 2: With Datasets
+Users can also self-specified different scheme: ./BNN SS-1 WL-1 SS-2 WL-2 SS-3 WL-3 SS-4 WL-4 SS-5 WL-5 (Replace the numbers with your own StepSize and WindowLength Sets)
 
-- Copy the dataset to be used to *code/bnn_lib_tests/experiments/images*
-- Depends on the test to be carried out, replace *code/bnn_lib_tests/src/main.cpp* with one of the testing scripts in *code/bnn_lib_tests/all-main-cpp/*
-- Change the test setting in the scripts
-- Recompile and run the program with:
+## Case 3: Compare Uncertainty Estimation Schemes Experiments
+
+Experiment for analysing the performance of different uncertainty estimation schemes under different scenarios. Dataset is used instead of the webcam. There are three estimation schemes:
+- Entropy
+- Autocorrelation
+- Variance
+
+Dataset Directory: ../experiments/uncertainty-datasetX (X ranges from 2 - 5)
+Output Log Directory: ../experiments/result/result-overview.csv
+
+Run the experiment with the following command:
 ```
-./BNN
+./UncertaintyExp
 ```
+
+
+## Case 4: Optimise Window Filter Configurations Experiments
+
+Experiment for finding the optimium window filter settings (Window Step Size & Window Length) for different scenarios. Dataset is used instead of the webcam.
+
+Dataset Directory: ../experiments/datasetX (X ranges from 1 - 5)
+Output Log Directory: ../experiments/result/result-overview.csv
+
+Run the experiment with the following command:
+```
+./WindowFilExp
+```
+
+## Other options
+Region-of-Interst code is also embedded in the file. Users can change the roi_config in the main files from "full-roi" to "opt-roi", "cont-roi","eff-roi", which correspond to optical flow detection, contour detection and hybrid of the two

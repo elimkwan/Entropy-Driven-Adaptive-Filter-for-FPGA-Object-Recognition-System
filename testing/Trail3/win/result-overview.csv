@@ -1,4 +1,0 @@
-
-Dataset, Base Setting, Drop frame , Flex window , Dynclk ,ROI scheme, Accuracy, Adjusted Accuracy, Classification Rate, Background Classification Rate, Processing Rate, Processing Rate per Processed Img, Processing Time per Img, Avg. Processing Time per Processed Img
-1,0,1,0,0,full-roi,82.5,73.5,37.8478,47.2764,189.239,183.118,5284.32,5460.96,200
-5,0,1,0,0,full-roi,58.5,62,37.7937,47.2001,188.969,183.058,5291.89,5462.76,200
