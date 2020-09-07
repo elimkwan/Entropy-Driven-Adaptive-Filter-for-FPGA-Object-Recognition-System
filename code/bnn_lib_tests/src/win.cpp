@@ -28,7 +28,6 @@ unsigned int Win_filter::analysis(const std::vector<float> &class_result, int mo
 	if (display_c == 4){
 		display_f = true;
 		display_c = 0;
-		//cout << "Display this frame" << endl;
 	} else {
 		display_f = false;
 		display_c ++;
@@ -245,7 +244,6 @@ vector<int> Win_filter::select_ws_wl(int mode, int aa, int bb, int cc, int dd, i
 		// case 4: return {7,2};
 		// case 5: return {5,2};
 
-		case 0: return {aa,bb};
 		case 1: return {aa,bb};
 		case 2: return {cc,dd};
 		case 3: return {ee,ff};

@@ -20,7 +20,8 @@ class Uncertainty{
     private:
 
         int __lambda;
-        int __state;
+        //int __state;
+        bool __init;
         std::vector<double> __uncertainty_score_buf;
         std::vector<double> __uncertainty_score_runningmean_buf;
         double __uncertainty_score_sum;
@@ -53,8 +54,9 @@ class Uncertainty{
         double running_mean(std::vector<double> &arg_vec, int n);
         double naive_mean(std::vector<double> &arg_vec, int n);
 
-        int update_state(double sample, double old_ma, double old_sd, float alpha, int n);
-        int select_powersaving_mode(int n);
+        int ps_mode(bool initialised, double new_sd);
+        //int update_state(double sample, double old_ma, double old_sd, float alpha, int n);
+        //int select_powersaving_mode(int n);
 
         void print_vector(std::vector<double> &vec);
         //void set_dataSum(double &elem);
@@ -64,7 +66,8 @@ class Uncertainty{
         Uncertainty(int lamda){
             __lambda = lamda;
 
-            __state = 0;
+            //__state = 0;
+            __init = false;
             __uncertainty_score_sum = 0;
             __uncertainty_score_running_mean = 0;
             __sd_of_uncertainty_score_running_mean = 0;

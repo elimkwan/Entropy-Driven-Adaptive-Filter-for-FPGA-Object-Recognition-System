@@ -44,24 +44,15 @@
 
  	Code developed by Elim Kwan in April 2020, modified from Xilinx and Musab Code
 
-	Uses webcam input for classification
-
-	./BNN 24 na notdrop notflexw full-roi ndynclk nbase 1 4 12
-	./BNN 24 na notdrop notflexw full-roi ndynclk nbase 1 10 4
-	./BNN 24 na notdrop notflexw full-roi ndynclk nbase 1 6 6
+	Uses webcam input for classification. Classify it as one of the ten classes ("airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck")
 
 	Command avaliable:
-	./BNN 500 en notdrop notflexw full-roi ndynclk nbase 4
-	./BNN 500 en notdrop notflexw opt-roi ndynclk nbase 4
-	./BNN 500 en notdrop notflexw cont-roi ndynclk nbase 4
-	./BNN 500 en notdrop notflexw eff-roi ndynclk nbase 4
-	./BNN 500 en notdrop flexw eff-roi ndynclk nbase 4
-	./BNN 500 en drop notflexw full-roi ndynclk nbase 4
-	./BNN 500 en drop notflexw opt-roi ndynclk nbase 4
-	./BNN 500 en drop notflexw cont-roi ndynclk nbase 4
-	./BNN 500 en drop notflexw eff-roi ndynclk nbase 4
-	./BNN 500 en drop flexw eff-roi ndynclk nbase 4
-	./BNN 500 en drop flexw eff-roi dynclk nbase 4
+	./BNN [No. of frame] [Schemes] [Expected Class]
+	[No. of frame]: number of frames to be Captured
+	[Schemes]: either A/B/C, adaptive filtering schemes to be applied, with A being most accurate and C most resources efficient
+	[Expected Class]: Enter the expected classification results, for analysing the system accuracy.
+
+	Example: "./BNN 500 A 4" means capture 500 frames, and apply scheme A for adaptive filter, expecting the input to be deer
 
  *
  *****************************************************************************/
@@ -107,14 +98,12 @@ unsigned int ok, failed; // used in FoldedMV.cpp
 
 const std::string USER_DIR = "/home/xilinx/jose_bnn/bnn_lib_tests/";
 const std::string BNN_PARAMS = USER_DIR + "params/cifar10/";
-const std::string TEST_DIR = "/home/xilinx/jose_bnn/bnn_lib_tests/experiments/";
+//const std::string TEST_DIR = "/home/xilinx/jose_bnn/bnn_lib_tests/experiments/";
 
 ofstream myfile;
-ofstream fs;
 
 //main functions
-//int classify_frames(unsigned int no_of_frame, string uncertainty_config, bool dropf_config, bool win_config, string roi_config, bool dynclk, unsigned int expected_class, bool base, int win_step, int win_length);
-int classify_frames(unsigned int no_of_frame, string uncertainty_config, int clk_config, int win_step, int win_length, int aa, int bb, int cc, int dd, int ee, int ff, int gg, int hh, int ii, int jj);
+int classify_frames(unsigned int no_of_frame, int scheme, int expected_class);
 void config_clock(int desired_frequency);
 
 /*
@@ -134,15 +123,6 @@ inline void print_vector(std::vector<T> &vec)
 	std::cout << "}" <<endl;
 }
 
-// double clockToMilliseconds(clock_t ticks){
-//     // units/(units/time) => time (seconds) * 1000 = milliseconds
-//     return (ticks/(double)CLOCKS_PER_SEC)*1000.0;
-// }
-
-// Convert matrix into a vector 
-// |1 0 0|
-// |0 1 0| -> [1 0 0 0 1 0 0 0 1]
-// |0 0 1|
 template<typename T>
 void flatten_mat(cv::Mat &m, std::vector<T> &v)
 {
@@ -297,18 +277,17 @@ int main(int argc, char** argv)
 	for(int i = 0; i < argc; i++)
 		cout << "argv[" << i << "]" << " = " << argv[i] << endl;
 
-	int aa = atoi(argv[1]);
-	int bb = atoi(argv[2]);
-	int cc = atoi(argv[3]);
-	int dd = atoi(argv[4]);
-	int ee = atoi(argv[5]);
-	int ff = atoi(argv[6]);
-	int gg = atoi(argv[7]);
-	int hh = atoi(argv[8]);
-	int ii = atoi(argv[9]);
-	int jj = atoi(argv[10]);
+	unsigned int no_of_frame = atoi(argv[1]);
+	std::string scheme_string = argv[2];
+	int expected_class = atoi(argv[3]);
+	
+	int scheme;
+	for (auto &elem : scheme_string){          
+        scheme *= elem - 'A' + 1; 
+    }
 
-	classify_frames(1, "na", 1, 1, 1, aa, bb, cc, dd, ee, ff, gg, hh, ii, jj);
+	config_clock(100); //reset clock to 100MHz
+	classify_frames(no_of_frame, scheme, expected_class);
 	return 1;
 }
 
@@ -316,7 +295,7 @@ void config_clock(int fsettings){
 /*
 	Change Programmable Logic Clock dynamically by changing the register value. This functions is modified from Musab Code.
 
-	@param fsettings: 1 to 5, with 5 being the highest frequency setting
+	@param fsettings: the desired frequency
 */
 	cout << "Starting PL clock configuration: " << endl;
 	int memfd;
@@ -362,84 +341,48 @@ void config_clock(int fsettings){
 		//default: *pl_clk = 0x00A00500; //20MHz
 	}
 
-	// if (fsettings == 5){
-	// 	*pl_clk = 0x00100600; //166MHz
-	// } else if (fsettings == 4){
-	// 	*pl_clk = 0x00100800; //125MHz
-	// } else if (fsettings == 3){
-	// 	*pl_clk = 0x00A00100; //100MHz
-	// } else if (fsettings == 2){
-	// 	*pl_clk = 0x00A00300; //33MHz
-	// } else if (fsettings == 1){
-	// 	*pl_clk = 0x00A00500; //20MHz
-	// } else{
-	// 	*pl_clk = 0x00A00100;//100MHz
-	// }
-
 	cout << "New PL clock configuration: " << hex << *pl_clk << endl;
 	cout << dec;
 
 }
 
-int classify_frames(unsigned int no_of_frame, string uncertainty_config, int clk_config, int win_step, int win_length, int aa, int bb, int cc, int dd, int ee, int ff, int gg, int hh, int ii, int jj){
+
+int classify_frames(unsigned int no_of_frame, int scheme, int expected_class){
 /*
 	Main analysis function for classifying the object in frame.
 
 	@param no_of_frame: Number of frames to be processed [10 ... 2000]
-	@param uncertainty_config: Choose the uncertainty calculation schemes to be used - [en var a na] 
-	@param dropf_config: Choose whether to decimate frames - [True False]
-	@param win_config: Choose whether to use flexible window filter - [True False]
-	@param roi_config: Choose the ROI schemes to be used - [full-roi cont-roi opt-roi eff-roi]
-	@param dynclk: Choose whether to use dynamica PL clock - [True False]
+	@param scheme: Choose the adaptive filter scheme to be used (input larger than 3 will be assumed to be using the base model) [1 2 3 >3]
 	@param expected_class: Choose the expected in-frame object for accuracy calculation [0 ... 9]
-	@param base: Choose whether to adopt base case setting - [True False]
 	:return: an integer
 
 */
+    //Initialize variables
+	cv::Mat reduced_sized_frame(32, 32, CV_8UC3);
+	cv::Mat cur_frame, src, reduced_roi_frame;
+	float_t scale_min = -1.0;
+	float_t scale_max = 1.0;
+	unsigned int number_class = 10;
+	unsigned int output = 0;
+	vector<string> classes = {"airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"};
+    unsigned int frame_num = 0;
+	tiny_cnn::vec_t outTest(number_class, 0);
+	const unsigned int count = 1;
+	std::vector<uint8_t> bgr;
+	std::vector<std::vector<float> > results_history; //for storing the classification result of previous frame
+	float identified = 0.0 , identified_adj = 0.0, total_time = 0.0, total_cap_time = 0.0, total_bnn = 0.0, total_win = 0.0, total_un = 0.0;
+	vector<Mat> frames;
 
-	//Set file name for accuracy and timing stats collected
-	// string d = "-ndrop";
-	// string w = "-nflexw-";
-	// string c = "-ndynclk";
-	// string ba = "-nbase";
-	// if (dropf_config){
-	// 	d = "-drop";
-	// }
-	// if (win_config){
-	// 	w = "-flexw-";
-	// }
-	// if (dynclk){
-	// 	c = "-dynclk";
-	// }
-	// if (base){
-	// 	ba = "-base";
-	// }
-
-
-	//Open webcam
-	// VideoCapture cap(0 + CV_CAP_V4L2);
-	// if(!cap.open(0 + CV_CAP_V4L2))
-	// {
-	// 	cout << "cannot open camera" << endl;
-	// 	return 0;
-	// }
-	// cap.set(CV_CAP_PROP_FRAME_WIDTH,frame_width);
-	// cap.set(CV_CAP_PROP_FRAME_HEIGHT,frame_height);
-	// cap >> cur_frame; //will be dropped, just for initialisation
-
-	//[Hardware-Related Functions]Initialize the BNN
-	deinit();
+    //[Hardware-Related Functions]Initialize the BNN
+    deinit();
 	load_parameters(BNN_PARAMS.c_str()); 
 	printf("Done loading BNN\n");
 	FoldedMVInit("cnv-pynq");
 	network<mse, adagrad> nn;
 	makeNetwork(nn);
 
-	//Allocate memories
-	const unsigned int count = 1;
-	float_t scale_min = -1.0;
-	float_t scale_max = 1.0;
-	// # of ExtMemWords per input
+    //Allocate memories
+    // # of ExtMemWords per input
 	const unsigned int psi = 384; //paddedSize(imgs.size()*inWidth, bitsPerExtMemWord) / bitsPerExtMemWord;
 	// # of ExtMemWords per output
 	const unsigned int pso = 16; //paddedSize(64*outWidth, bitsPerExtMemWord) / bitsPerExtMemWord;
@@ -451,465 +394,356 @@ int classify_frames(unsigned int no_of_frame, string uncertainty_config, int clk
 	ExtMemWord * packedImages = (ExtMemWord *)sds_alloc((count * psi)*sizeof(ExtMemWord));
 	ExtMemWord * packedOut = (ExtMemWord *)sds_alloc((count * pso)*sizeof(ExtMemWord));
 
-	//vector< vector<int> > win_list = {{5,1}}; //base
-	//vector<int> clk_list = {20};
 
-	vector<int> dataset_list = {1,2,3,4,5};
-	vector <vector<int> > win_list = {{1,1}};
-	vector<string> un_list = {"en"};
+	//Open webcam
+	VideoCapture cap(0 + CV_CAP_V4L2);
+	if(!cap.open(0 + CV_CAP_V4L2))
+	{
+		cout << "cannot open camera" << endl;
+		return 0;
+	}
+	cap.set(CV_CAP_PROP_FRAME_WIDTH,frame_width);
+	cap.set(CV_CAP_PROP_FRAME_HEIGHT,frame_height);
+	cap >> cur_frame; //will be dropped, just for initialisation
 
-	// vector<vector<int>> win_list(225, vector<int> (2, 0)); //15*15 = 100
-	// int c = 1;
-	// int d = 1;
-	// for (int k = 0; k < 100; k++){
-	// 	win_list[k][0] = c;
-	// 	win_list[k][1] = d;
-	// 	if ((k+1)%15 == 0){
-	// 		d++;
-	// 	}
-	// 	if (c != 15){
-	// 		c++;
-	// 	} else{
-	// 		c=1;
-	// 	}
-	// } ./BNN 1 1 1 1 1 1 1 1 1 1 
-
-	config_clock(20);
+	//Initialise Configures for Roi, Window and Uncertainty Filter
+	std::string uncertainty_config = "en"; //Entropy as Uncertainty Estimation Scheme
 	std::string roi_config = "full-roi";
 	bool dynclk = false;
+	bool win_config;
+	int win_step = 1; 
+	int win_length = 1;
+	if (scheme > 3){
+		//base case
+		win_config = false;
+		win_step = 5;
+		win_length = 1;
+	} else {
+		//scheme A/B/C
+		win_config =  true;
+	}
 
-	float expected_acc = 66;
-	float resultant_acc = 0;
-	int exp_count = 0;
-
-	//while(resultant_acc < expected_acc && exp_count< 10){
-		fs.open ("./experiments/result/result-overview.csv",std::ios_base::app);
-		fs <<  "\n Dataset, Accuracy, Avg Frame Rate, Avg Processing Rate, Avg Classification Rate, Avg BNN latency, Avg BNN latency per classification, Avg Win Time, Avg Win Time per classification, Avg Un Time, Avg Un Time per classification, PL Clk Setting(MHz)";
-	
-
-		resultant_acc = 0;
-		// aa = 2;
-		// bb = 9;
-		// cc = (rand() % 11) + 1;
-		// dd = (rand() % 11) + 1;
-		// ee = 5;
-		// ff = 9;
-		// gg = 7;
-		// hh = 2;
-		// ii = 5;
-		// jj = 2;
-
-		for (int i = 0; i < dataset_list.size(); i++){
-
-			int folder_num = dataset_list[i];
-
-			//loading dataset
-			vector<cv::String> fn;
-			string src_dir =  TEST_DIR + "U" + to_string(folder_num) + "/*.png";
-			glob(src_dir, fn, false);
-			size_t count_fn = fn.size();
-
-			cout << "Dataset" << folder_num << endl;
-
-			for (int j = 0; j < un_list.size(); j ++){
-				uncertainty_config = un_list[j];
-
-				for (int k = 0; k < win_list.size(); k++){
-					bool win_config = false; //flex
-					win_step = win_list[k][0];
-					win_length = win_list[k][1];
-
-					//cout << "Window: " << win_step << "-" << win_length << endl;
-
-					// ----------------------------------------------------------------------------------------------------------------
-					// ----------------------------------------------------------------------------------------------------------------
-					// ----------------------------------------------------------------------------------------------------------------
-					
-					std::string result_dir = "./experiments/result/dataset" + std::to_string(folder_num) + "-" + uncertainty_config + ".csv";
-					myfile.open (result_dir,std::ios_base::app);
-					//myfile << "\n" << result_dir;
-					myfile << "\nFrame No." << "," << "MA" << "," << "SD" << "\n";
-					//myfile << "\nFrame No., inst camera frame rate (fps), Processing Latency(us), Classification rate(fps), Classification Latency(us), Displayed Output, Processed Output, cap(us), roi(us),preprocessing(us), bnn_time(us), un_time(us), win_time(us) \n";
-
-					//Initialize variables
-					cv::Mat reduced_sized_frame(32, 32, CV_8UC3);
-					cv::Mat cur_frame, src, reduced_roi_frame;
-					unsigned int number_class = 10;
-					unsigned int output = 0;
-					vector<string> classes = {"airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"};
-					unsigned int frame_num = 0;
-					tiny_cnn::vec_t outTest(number_class, 0);
-					std::vector<uint8_t> bgr;
-					std::vector<std::vector<float> > results_history; //for storing the classification result of previous frame
-					float identified = 0.0 , identified_adj = 0.0, total_time = 0.0, total_cap_time = 0.0, total_bnn = 0.0, total_win = 0.0, total_un = 0.0;
-
-					cur_frame = imread(fn[0]);
-					//Initialise Roi, Window and Uncertainty Filter
-					Roi_filter r_filter(frame_width,frame_height);
-					r_filter.init_enhanced_roi(cur_frame);
-					Win_filter w_filter(win_step, win_length);
-					w_filter.init_weights(0.2f);
-					Uncertainty u_filter(5);
-
-					//Initialise variables after webcam and filter initialisation
-					int ps_mode = 0;
-					int frames_dropped = 0;
-					unsigned int adjusted_output = 0;
-					cv::Mat display_frame = cur_frame.clone();
-					int pastclk = 100;
-					float acc_time = 0;
-					int processed_frames = 0;
-					int cls_frames = 0;
-					string display_output = "";
-					Rect display_roi(Point(0,0), Point(frame_width, frame_height));
-					bool process_frame = true;
-					std::vector<float> class_result;
-					std::string correct = "";
-
-					//while(frame_num < no_of_frame){
-					for (size_t d=0; d<count_fn; d++){
-					//for (size_t d=0; d<100; d++){
-
-						Rect roi(Point(0,0), Point(frame_width, frame_height));
-						process_frame = !(w_filter.dropf()); //check whether the current frame will be processed
-						//std::cout << "-------------------------------------------------"<< endl;
-						//std::cout << "Frame Number: " << frame_num << endl;
-						float cap_time = 0;
-						float preprocessing_time = 0;
-						float bnn_time = 0;
-						float uncertainty_time = 0;
-						float wfilter_time = 0;
-						float en_time = 0;
-						float var_time = 0;
-						vector<double> u(5, 0.0);
-
-						cur_frame = imread(fn[d]);
-
-						auto t0 = chrono::high_resolution_clock::now(); //time statistics
-						//auto t1 = chrono::high_resolution_clock::now(); //time statistics
-
-						//Pipeline Capture Frame and ROI code Block with OpenMP Lib
-						#pragma omp parallel sections
-						{
-							#pragma omp section
-							{
-								//cap >> cur_frame;
-								waitKey(6);
-								display_frame = cur_frame.clone();
-
-								auto t2 = chrono::high_resolution_clock::now();	//time statistics
-								cap_time = chrono::duration_cast<chrono::microseconds>( t2 - t0 ).count();
-							}
-
-							#pragma omp section
-							{	
-								//ROI Functions
-								auto t3 = chrono::high_resolution_clock::now(); //time statistics
-								if (process_frame){
-
-									if (roi_config == "eff-roi"){
-
-										cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC);
-										if (ps_mode != 1){
-											r_filter.init_enhanced_roi(reduced_roi_frame);
-										}
-
-										if (ps_mode == 0){
-
-											roi = r_filter.get_full_roi();
-
-										}else if (ps_mode == 1){
-
-											roi = r_filter.enhanced_roi(reduced_roi_frame);
-
-										}else if (ps_mode == 2){
-
-											roi = r_filter.get_past_roi();
-
-										}else if (ps_mode == 3){
-
-											roi = r_filter.basic_roi(reduced_roi_frame);
-
-										}else{
-											roi = r_filter.get_past_roi();
-										}
-
-										src = cur_frame(roi);
-										cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-										flatten_mat(reduced_sized_frame, bgr);
-										vec_t img;
-										std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-										quantiseAndPack<8, 1>(img, &packedImages[0], psi);
-
-									} else if (roi_config == "opt-roi"){
-
-										cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
-										//cv::resize(cur_frame, reduced_roi_frame, cv::Size(320, 240), 0, 0, cv::INTER_CUBIC );
-
-										if (frame_num < 2){
-											roi = r_filter.get_full_roi();
-											r_filter.init_enhanced_roi(reduced_roi_frame);
-										} else {
-											roi = r_filter.enhanced_roi(reduced_roi_frame);
-										}
-
-										src = cur_frame(roi);
-										cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-										flatten_mat(reduced_sized_frame, bgr);
-										vec_t img;
-										std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-										quantiseAndPack<8, 1>(img, &packedImages[0], psi);
+	//Open file to log result
+	std::string result_dir = "./experiments/result/Scheme" + std::to_string(scheme) + ".csv";
+	myfile.open (result_dir,std::ios_base::app);
+	myfile << "\n" << result_dir;
+	myfile << "\nFrame No., inst camera frame rate (fps), Processing Latency(us), Classification rate(fps), Classification Latency(us), Output , cap(us), roi(us),preprocessing(us), bnn_time(us), un_time(us), win_time(us) \n";
 
 
-									} else if (roi_config == "cont-roi") {
-										
-										cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
-										//cv::resize(cur_frame, reduced_roi_frame, cv::Size(320, 240), 0, 0, cv::INTER_CUBIC );
+	//Initialise Roi, Window and Uncertainty Filter
+	Roi_filter r_filter(frame_width,frame_height);
+	r_filter.init_enhanced_roi(cur_frame);
+	Win_filter w_filter(win_step, win_length);
+	w_filter.init_weights(0.2f);
+	Uncertainty u_filter(5);
 
-										if (frame_num < 2){
-											roi = r_filter.get_full_roi();
-										} else {
-											roi = r_filter.basic_roi(reduced_roi_frame);
-										}
+	//Initialise variables after webcam and filter initialisation
+	int ps_mode = 0;
+	int frames_dropped = 0;
+	unsigned int adjusted_output = 0;
+	cv::Mat display_frame = cur_frame.clone();
+	int pastclk = 100;
+	float acc_time = 0;
+	int processed_frames = 0;
+	int cls_frames = 0;
+	string display_output = "";
+	Rect display_roi(Point(0,0), Point(frame_width, frame_height));
+	bool process_frame = true;
+	std::vector<float> class_result;
 
-										src = cur_frame(roi);
-										cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-										flatten_mat(reduced_sized_frame, bgr);
-										vec_t img;
-										std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-										quantiseAndPack<8, 1>(img, &packedImages[0], psi);
+    while(frame_num < no_of_frame){
 
+		auto t0 = chrono::high_resolution_clock::now(); //time statistics
 
-									} else {
+		Rect roi(Point(0,0), Point(frame_width, frame_height));
 
-										//use full frame all the time, no roi
-										cv::resize(cur_frame, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
-										flatten_mat(reduced_sized_frame, bgr);
-										vec_t img;
-										std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
-										quantiseAndPack<8, 1>(img, &packedImages[0], psi);
+		process_frame = !(w_filter.dropf()); //check whether the current frame will be processed
+		std::cout << "-------------------------------------------------"<< endl;
+		std::cout << "Frame Number: " << frame_num << " Process Frames? " << process_frame << endl;
 
-									}
-								}
-								//if dropping frame, not going to resize roi and transform it to array
-								auto t4 = chrono::high_resolution_clock::now();	//time statistics
-								preprocessing_time = chrono::duration_cast<chrono::microseconds>( t4 - t3 ).count();
+		// auto t00 = chrono::high_resolution_clock::now(); //time statistics
+		// auto temp = chrono::duration_cast<chrono::microseconds>( t00 - t0 ).count();
+		float cap_time = 0;
+		float preprocessing_time = 0;
+		float bnn_time = 0;
+		float uncertainty_time = 0;
+		float wfilter_time = 0;
+		float en_time = 0;
+		float var_time = 0;
+		vector<double> u(5, 0.0);
 
-							}
+		//Pipeline Capture Frame and ROI code Block with OpenMP Lib
+		#pragma omp parallel sections
+		{
+			#pragma omp section
+			{
+				//Capture Frame Function
+				auto t1 = chrono::high_resolution_clock::now(); //time statistics
+
+				cap >> cur_frame;
+				display_frame = cur_frame.clone();
+
+				auto t2 = chrono::high_resolution_clock::now();	//time statistics
+				cap_time = chrono::duration_cast<chrono::microseconds>( t2 - t1 ).count();
+			}
+
+			#pragma omp section
+			{	
+				//ROI Functions
+				auto t3 = chrono::high_resolution_clock::now(); //time statistics
+				if (process_frame){
+
+					if (roi_config == "eff-roi"){
+
+						cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC);
+						if (ps_mode != 1){
+							r_filter.init_enhanced_roi(reduced_roi_frame);
 						}
-						auto t5 = chrono::high_resolution_clock::now();	//time statistics
-						auto parallel_time = chrono::duration_cast<chrono::microseconds>( t5 - t0 ).count();
 
-						//If using dynamic clock, change clock frquency to high settings when level of certainty is low
-						// if (dynclk){
-						// 	if ( (ps_mode == 4 || ps_mode == 5) && pastclk == 100){
-						// 		//high level of certainty
-						// 		config_clock(5);
-						// 		pastclk = 50;
-						// 	} else if ((ps_mode == 0 || ps_mode == 1 || ps_mode == 2 || ps_mode == 3) && pastclk == 50){
-						// 		//low level of certainty
-						// 		config_clock(1);
-						// 		pastclk = 100;
-						// 	}
-						// }
+						if (ps_mode == 0){
 
-						if (process_frame){
-							//[Hardware-Related Functions] Call the bnn
-							auto t66 = chrono::high_resolution_clock::now();	//time statistics
-							kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,1,0);
-							if (frame_num != 1)
-							{
-								kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,0,1);
-							}
-							//Extract the output of BNN and classify result
-							//std::vector<float> class_result;
-							class_result.clear();
-							copyFromLowPrecBuffer<unsigned short>(&packedOut[0], outTest);
-							for(unsigned int j = 0; j < number_class; j++) {			
-								class_result.push_back(outTest[j]);
-							}
-							output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
+							roi = r_filter.get_full_roi();
 
-							auto t6 = chrono::high_resolution_clock::now();	//time statistics
-							bnn_time = chrono::duration_cast<chrono::microseconds>( t6 - t66 ).count();
+						}else if (ps_mode == 1){
 
-							//Data post-processing:
-							//calculate uncertainty
-							auto t77 = chrono::high_resolution_clock::now();	//time statistics
-							u = u_filter.cal_uncertainty(class_result,uncertainty_config, output);
-							ps_mode = u[4];
-							auto t7 = chrono::high_resolution_clock::now();	//time statistics
-							uncertainty_time = chrono::duration_cast<chrono::microseconds>( t7 - t77 ).count();
+							roi = r_filter.enhanced_roi(reduced_roi_frame);
+
+						}else if (ps_mode == 2){
+
+							roi = r_filter.get_past_roi();
+
+						}else if (ps_mode == 3){
+
+							roi = r_filter.basic_roi(reduced_roi_frame);
+
+						}else{
+							roi = r_filter.get_past_roi();
+						}
+
+						src = cur_frame(roi);
+						cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
+						flatten_mat(reduced_sized_frame, bgr);
+						vec_t img;
+						std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+						quantiseAndPack<8, 1>(img, &packedImages[0], psi);
+
+					} else if (roi_config == "opt-roi"){
+
+						cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
+						//cv::resize(cur_frame, reduced_roi_frame, cv::Size(320, 240), 0, 0, cv::INTER_CUBIC );
+
+						if (frame_num < 2){
+							roi = r_filter.get_full_roi();
+							r_filter.init_enhanced_roi(reduced_roi_frame);
 						} else {
-							class_result.clear();
-							for(unsigned int j = 0; j < number_class; j++) {			
-								class_result.push_back(0);
-							}
+							roi = r_filter.enhanced_roi(reduced_roi_frame);
 						}
 
-						auto t8 = chrono::high_resolution_clock::now();	//time statistics
-						bool processf = w_filter.processf();
-						// if (processf){
-						// 	processed_frames += 1;
-						// }
+						src = cur_frame(roi);
+						cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
+						flatten_mat(reduced_sized_frame, bgr);
+						vec_t img;
+						std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+						quantiseAndPack<8, 1>(img, &packedImages[0], psi);
 
-						if (process_frame){
-							processed_frames += 1;
-						}
-						//Window Filter
-						adjusted_output = w_filter.analysis(class_result,ps_mode, win_config, aa, bb, cc, dd, ee, ff, gg, hh, ii, jj); //if win_config is true, win_step and length are flexible, else they are fixed to 8 12
-						auto t9 = chrono::high_resolution_clock::now();	//time statistics
-						wfilter_time = chrono::duration_cast<chrono::microseconds>( t9 - t8).count();
-						float overall_time = chrono::duration_cast<chrono::microseconds>( t9 - t0 ).count();
 
-						//std::cout << "adjusted output: " << adjusted_output << endl;
-						if (adjusted_output > 9){
-							adjusted_output = 9;
-						}
-
-						//---------------------------------------Below output result to users and stored them on CSV files---------------------------------------------------------------
-						// std::cout << "-------------------------------------------------"<< endl;
-						// std::cout << "frame num: " << frame_num << endl;
-						// std::cout << "adjusted output: " << classes[adjusted_output] << endl;
-						// std::cout << "-------------------------------------------------"<< endl;
+					} else if (roi_config == "cont-roi") {
 						
-						std::string expected_class = fn[frame_num];
-						int first_idx = expected_class.find_last_of('_') + 1;
-						expected_class = expected_class.substr(first_idx, expected_class.length()-4);
-						expected_class.erase(expected_class.length()-4);
+						cv::resize(cur_frame, reduced_roi_frame, cv::Size(80, 60), 0, 0, cv::INTER_CUBIC );
+						//cv::resize(cur_frame, reduced_roi_frame, cv::Size(320, 240), 0, 0, cv::INTER_CUBIC );
 
-						if (frame_num == 0){
-							//myfile << frame_num << "\n" ;
-							//imshow("Original", display_frame);
-							//waitKey(25);
-							frame_num++;
-							continue; // exclude first frame from calculation skip the remaining code in the loop
-						}
-
-						float cam_fps = 1000000/(float)cap_time;
-						std::string r_out, a_out;
-						float cls_fps, cls;
-
-						correct = "";
-						if (frame_num == 0){
-							r_out = " ";
-							a_out = " ";
-							acc_time = 0;
-							cls_fps = 0;
-							cls = 0;
-						} else if (w_filter.get_display_f()){
-							cls_frames ++;
-
-							r_out = classes[adjusted_output];
-							display_output = classes[adjusted_output];//update displayed output
-							display_roi = roi;
-							acc_time += overall_time;
-
-							if (acc_time == 0){ //first frame
-								acc_time = overall_time;
-								cls_fps = 0;
-							} else {
-								cls_fps = 1000000/(float)acc_time;
-								cls = acc_time; //in us
-							}
-
-							if (expected_class == classes[adjusted_output]){
-								identified_adj++;
-								correct = "correct";
-							} else{
-								correct = "wrong";
-							}
-							// else {
-							// 	cout << "Wrong when at " << ps_mode << endl;
-							// }
-							acc_time = 0; //reset accumulated time
-
+						if (frame_num < 2){
+							roi = r_filter.get_full_roi();
 						} else {
-							r_out = " ";
-							acc_time += overall_time;
-							cls_fps = 0;
-							cls = 0;
+							roi = r_filter.basic_roi(reduced_roi_frame);
 						}
 
-						if (frame_num != 0 && processf){
-							a_out = classes[adjusted_output];
-						} else{
-							a_out = " ";
-						}
+						src = cur_frame(roi);
+						cv::resize(src, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
+						flatten_mat(reduced_sized_frame, bgr);
+						vec_t img;
+						std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+						quantiseAndPack<8, 1>(img, &packedImages[0], psi);
 
-						//myfile << frame_num << "," << cam_fps << "," << overall_time << "," << cls_fps << "," << cls << "," << r_out << "," << a_out << "," << cap_time << "," << preprocessing_time << "," << parallel_time << "," <<  bnn_time << "," << uncertainty_time << "," << wfilter_time << "\n";
-						myfile << frame_num << "," << u[1] << "," << u[2] << "\n";
-						//myfile << frame_num << "," << a_out << "," << r_out << "," << correct << "," << u[1] << "," << ps_mode << "\n";
 
-						if (frame_num != 0){
-							total_time = total_time + (float)overall_time/1000000;
-							total_cap_time = total_cap_time + (float)cap_time/1000000;
-							total_bnn += (float)bnn_time;
-							total_win += (float)wfilter_time;
-							total_un += (float)uncertainty_time;
-						}
+					} else {
 
-						//Display output
-						// rectangle(display_frame, display_roi, Scalar(0, 0, 255));
-						// putText(display_frame, display_output, Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));	
-						// imshow("Original", display_frame);
-						// waitKey(25);
+						//use full frame all the time, no roi
+						cv::resize(cur_frame, reduced_sized_frame, cv::Size(32, 32), 0, 0, cv::INTER_CUBIC );
+						flatten_mat(reduced_sized_frame, bgr);
+						vec_t img;
+						std::transform(bgr.begin(), bgr.end(), std::back_inserter(img),[=](unsigned char c) { return scale_min + (scale_max - scale_min) * c / 255; });
+						quantiseAndPack<8, 1>(img, &packedImages[0], psi);
 
-						frame_num++;
-
-						char ESC = waitKey(1);	
-						if (ESC == 27) 
-						{
-							cout << "ESC key is pressed by user" << endl;
-							break;
-						}	
 					}
-
-					//exclude first frame from calculation
-					float f = (float)frame_num - 1;
-					// float pf = (win_length == 1)? ((float)cls_frames-1) : (float)cls_frames;
-					// float ppf = (win_length == 1)? ((float)processed_frames-1) : (float)processed_frames;
-					float pf = cls_frames-1;
-					float ppf = processed_frames-1;
-
-					float accuracy_adj = 100.0*((float)identified_adj/cls_frames);
-					float avg_cam_fps = f/total_time;
-					float avg_pro_fps = ppf/total_time;
-					float avg_cls_fps = pf/total_time;
-					float avg_bnn = total_bnn/f;
-					float avg_bnn_perc = total_bnn/pf;
-					float avg_win = total_win/f;
-					float avg_win_perc = total_win/pf;
-					float avg_un= total_un/f;
-					float avg_un_perc = total_un/pf;
-
-					float temp = avg_cam_fps/win_step;
-
-					//myfile << "\n Step Size, Length, Accuracy, Avg Frame Rate, Avg Processing Rate, Avg Classification Rate, Avg BNN latency, Avg BNN latency per classification, Avg Win Time, Avg Win Time per classification, Avg Un Time, Avg Un Time per classification, PL Clk Setting(MHz)";
-					//myfile << "\n" << win_step << "," << win_length << "," << accuracy_adj << "," << avg_cam_fps << "," << avg_pro_fps << "," << avg_cls_fps << "," << avg_bnn << "," << avg_bnn_perc << "," << avg_win << "," << avg_win_perc << "," << avg_un << "," << avg_un_perc << "," << clk_frq << "\n";
-					//myfile << cls_frames << "," << processed_frames << "," << avg_pro_fps << "\n";
-					//myfile << "\n \n";
-					myfile.close();
-
-					// ----------------------------------------------------------------------------------------------------------------
-					// ----------------------------------------------------------------------------------------------------------------
-					// ----------------------------------------------------------------------------------------------------------------
-					
-					//fs << "\n" << folder_num << "," << accuracy_adj << "," << avg_cam_fps << "," << avg_pro_fps << "," << avg_cls_fps << "," << avg_bnn << "," << avg_bnn_perc << "," << avg_win << "," << avg_win_perc << "," << avg_un << "," << avg_un_perc << "," << uncertainty_config << "," << aa << "," << bb << "," << cc << "," << dd << "," << ee << "," << ff << "," << gg << "," << hh << "," << ii << "," << jj ;
-					fs << "\n" << folder_num << "," << accuracy_adj << "," << avg_cam_fps << "," << avg_pro_fps << "," << avg_cls_fps << "," << avg_bnn << "," << avg_bnn_perc << "," << avg_win << "," << avg_win_perc << "," << avg_un << "," << avg_un_perc << "," << uncertainty_config << ","<< identified_adj << "," << cls_frames;
-					
-					resultant_acc += accuracy_adj;
 				}
+				//if dropping frame, not going to resize roi and transform it to array
+				auto t4 = chrono::high_resolution_clock::now();	//time statistics
+				preprocessing_time = chrono::duration_cast<chrono::microseconds>( t4 - t3 ).count();
+
 			}
 		}
-		exp_count++;
-		resultant_acc = resultant_acc/6;
-		cout << "Accuracy " << resultant_acc << endl;
-		fs.close();
-	//}
+		auto t5 = chrono::high_resolution_clock::now();	//time statistics
+		auto parallel_time = chrono::duration_cast<chrono::microseconds>( t5 - t0 ).count();
 
-	//cap.release();
-	config_clock(20); //reset clock to 100MHz
+		//If using dynamic clock, change clock frquency to high settings when level of certainty is low
+		if (process_frame){
+			//[Hardware-Related Functions] Call the bnn
+			kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,1,0);
+			if (frame_num != 1)
+			{
+				kernelbnn((ap_uint<64> *)packedImages, (ap_uint<64> *)packedOut, false, 0, 0, 0, 0, count,psi,pso,0,1);
+			}
+			//Extract the output of BNN and classify result
+			//std::vector<float> class_result;
+			class_result.clear();
+			copyFromLowPrecBuffer<unsigned short>(&packedOut[0], outTest);
+			for(unsigned int j = 0; j < number_class; j++) {			
+				class_result.push_back(outTest[j]);
+			}
+			output = distance(class_result.begin(),max_element(class_result.begin(), class_result.end()));
+
+			auto t6 = chrono::high_resolution_clock::now();	//time statistics
+			bnn_time = chrono::duration_cast<chrono::microseconds>( t6 - t5 ).count();
+
+			//Data post-processing:
+			//calculate uncertainty
+			u = u_filter.cal_uncertainty(class_result,uncertainty_config, output);
+			ps_mode = u[3];
+
+			auto t7 = chrono::high_resolution_clock::now();	//time statistics
+			uncertainty_time = chrono::duration_cast<chrono::microseconds>( t7 - t6 ).count();
+		} else {
+			class_result.clear();
+			for(unsigned int j = 0; j < number_class; j++) {			
+				class_result.push_back(0);
+			}
+		}
+
+		if (process_frame){
+			processed_frames += 1;
+		}
+
+		auto t8 = chrono::high_resolution_clock::now();	//time statistics
+		//Window Filter
+		int aa=1,bb=1,cc=1,dd=1,ee=1,ff=1,gg=1,hh=1,ii=1,jj=1;
+		switch(scheme) {
+			case 1: aa=1,bb=1,cc=10,dd=15,ee=12,ff=15,gg=1,hh=10,ii=10,jj=13; break;
+			case 2: aa=1,bb=1,cc=15,dd=15,ee=15,ff=12,gg=15,hh=10,ii=10,jj=8; break;
+			case 3: aa=1,bb=1,cc=10,dd=8,ee=15,ff=12,gg=15,hh=10,ii=10,jj=6; break;
+		}
+		adjusted_output = w_filter.analysis(class_result,ps_mode, win_config, aa, bb, cc, dd, ee, ff, gg, hh, ii, jj); //if win_config is true, win_step and length are flexible, else they are fixed to 8 12
+		auto t9 = chrono::high_resolution_clock::now();	//time statistics
+		wfilter_time = chrono::duration_cast<chrono::microseconds>( t9 - t8).count();
+		float overall_time = chrono::duration_cast<chrono::microseconds>( t9 - t0 ).count();
+
+		std::cout << "adjusted output: " << adjusted_output << endl;
+		if (adjusted_output > 9){
+			adjusted_output = 9;
+		}
+
+		//---------------------------------------Below output result to users and stored them on CSV files---------------------------------------------------------------
+		// std::cout << "-------------------------------------------------"<< endl;
+		// std::cout << "frame num: " << frame_num << endl;
+		// std::cout << "adjusted output: " << classes[adjusted_output] << endl;
+		// std::cout << "-------------------------------------------------"<< endl;
+
+		if (frame_num == 0){
+			myfile << frame_num << "\n" ;
+			imshow("Original", display_frame);
+			waitKey(25);
+			frame_num++;
+			continue; // exclude first frame from calculation skip the remaining code in the loop
+		}
+
+		float cam_fps = 1000000/(float)cap_time;
+		std::string r_out, a_out;
+		float cls_fps, cls;
+
+		if (frame_num == 0){
+			r_out = " ";
+			a_out = " ";
+			acc_time = 0;
+			cls_fps = 0;
+			cls = 0;
+		} else if (w_filter.get_display_f()){
+			cls_frames ++;
+
+			r_out = classes[adjusted_output];
+			display_output = classes[adjusted_output];
+			display_roi = roi;
+			acc_time += overall_time;
+
+			if (acc_time == 0){ //first frame
+				acc_time = overall_time;
+				cls_fps = 0;
+			} else {
+				cls_fps = 1000000/(float)acc_time;
+				cls = acc_time; //in us
+			}
+
+			if (int(expected_class) == int(adjusted_output)){
+				identified_adj++;
+			}
+			acc_time = 0; //reset accumulated time
+
+		} else {
+			r_out = " ";
+			acc_time += overall_time;
+			cls_fps = 0;
+			cls = 0;
+		}
+
+		myfile << frame_num << "," << cam_fps << "," << overall_time << "," << cls_fps << "," << cls << "," << r_out << "," << cap_time << "," << preprocessing_time << "," << parallel_time << "," <<  bnn_time << "," << uncertainty_time << "," << wfilter_time << "\n";
+		
+		if (frame_num != 0){
+			total_time = total_time + (float)overall_time/1000000;
+			total_cap_time = total_cap_time + (float)cap_time/1000000;
+			total_bnn += (float)bnn_time;
+			total_win += (float)wfilter_time;
+			total_un += (float)uncertainty_time;
+		}
+
+		//Display output
+		rectangle(display_frame, display_roi, Scalar(0, 0, 255));
+		putText(display_frame, display_output, Point(15, 55), FONT_HERSHEY_PLAIN, 1, Scalar(0, 255, 0));	
+		imshow("Original", display_frame);
+		waitKey(25);
+
+		frame_num++;
+
+		char ESC = waitKey(1);	
+		if (ESC == 27) 
+        {
+            cout << "ESC key is pressed by user" << endl;
+            break;
+        }	
+    }
+
+	//exclude first frame from calculation
+	float f = (float)frame_num - 1;
+	float pf = (win_length == 1)? ((float)cls_frames-1) : (float)cls_frames;
+	float ppf = (win_length == 1)? ((float)processed_frames-1) : (float)processed_frames;
+
+	float accuracy_adj = 100.0*((float)identified_adj/pf);
+	float avg_cam_fps = f/total_time;
+	float avg_pro_fps = ppf/total_time;
+	float avg_cls_fps = pf/total_time;
+	float avg_bnn = total_bnn/f;
+	float avg_bnn_perc = total_bnn/pf;
+	float avg_win = total_win/f;
+	float avg_win_perc = total_win/pf;
+	float avg_un= total_un/f;
+	float avg_un_perc = total_un/pf;
+
+	myfile << "\n Step Size, Length, Accuracy, Avg Frame Rate, Avg Processing Rate, Avg Classification Rate, Avg BNN latency, Avg BNN latency per classification, Avg Win Time, Avg Win Time per classification, Avg Un Time, Avg Un Time per classification, PL Clk(MHz)";
+	myfile << "\n" << win_step << "," << win_length << "," << accuracy_adj << "," << avg_cam_fps << "," << avg_pro_fps << "," << avg_cls_fps << "," << avg_bnn << "," << avg_bnn_perc << "," << avg_win << "," << avg_win_perc << "," << avg_un << "," << avg_un_perc << "," << 100 << "\n";
+	myfile << "\n \n";
+	myfile.close();
+
+	cap.release();
+	//reset clock to 100MHz
+	config_clock(100);
     //[Hardware-Related Functions] Release memory
     sds_free(packedImages);
 	sds_free(packedOut);

@@ -23,7 +23,7 @@ std::vector<double> Uncertainty::cal_uncertainty(std::vector<float> class_result
 */
 
     if (mode == "na"){
-        return {100, 100, 0, 0, 1};
+        return {100, 100, 0, 1};
     }
 
     //mode 1: varience; mode 2:entropy; mode 3: correlation
@@ -49,7 +49,7 @@ std::vector<double> Uncertainty::cal_uncertainty(std::vector<float> class_result
 
     if (std::isnan(uncertainty_score)){
         cout << "uncertainty score is nan" << endl;
-        return {100, 100, 0, 0, 1};
+        return {100, 100, 0, 1};
     }
 
     insert_buf(__uncertainty_score_buf, uncertainty_score);
@@ -58,11 +58,11 @@ std::vector<double> Uncertainty::cal_uncertainty(std::vector<float> class_result
     if (uncertainty_score_buf_size < __lambda){
         //cout << "----------initialising stage 1---------" << endl;
         __uncertainty_score_sum += uncertainty_score;
-        return {uncertainty_score, 100, 0, 0, 1};
+        return {uncertainty_score, 100, 0, 1};
 
     }
     
-    if (uncertainty_score_buf_size == __lambda && __state == 0){
+    if (uncertainty_score_buf_size == __lambda && !__init){
         //cout << "----------initialising stage 2---------" << endl;
         uncertainty_score_runningmean = running_mean_init(uncertainty_score);
 
@@ -70,7 +70,7 @@ std::vector<double> Uncertainty::cal_uncertainty(std::vector<float> class_result
         //cout << "Running Mean: " << uncertainty_score_runningmean << endl;
         //print_vector(__uncertainty_score_runningmean_buf);
 
-        return {uncertainty_score, uncertainty_score_runningmean, 0, 0, 1};
+        return {uncertainty_score, uncertainty_score_runningmean, 0, 1};
     }
 
     //refresh uncertainty_score_runningmean: to sharpen the moving avaerage
@@ -93,7 +93,7 @@ std::vector<double> Uncertainty::cal_uncertainty(std::vector<float> class_result
     if (uncertainty_score_runningmean_buf_size < __lambda){
         //cout << "----------initialising stage 3---------" << endl;
         constraint_buf(__uncertainty_score_buf);
-        return {uncertainty_score, uncertainty_score_runningmean, 0, 0, 1};
+        return {uncertainty_score, uncertainty_score_runningmean, 0, 1};
     }
 
     if (uncertainty_score_runningmean_buf_size == __lambda){
@@ -105,8 +105,9 @@ std::vector<double> Uncertainty::cal_uncertainty(std::vector<float> class_result
         __aggrM = r[1];
 
         constraint_buf(__uncertainty_score_buf);
-        __state = 1;
-        return {uncertainty_score, uncertainty_score_runningmean, 0, 1, 1};
+        //__state = 1;
+        __init = true;
+        return {uncertainty_score, uncertainty_score_runningmean, 0, 1};
     }
 
 
@@ -125,14 +126,15 @@ std::vector<double> Uncertainty::cal_uncertainty(std::vector<float> class_result
         //cout<< "ALPHA SET: " << __alpha <<endl;
     }
 
-    int aggressiveness = 3;
+    int cur_mode = ps_mode(__init, __sd_of_uncertainty_score_running_mean);
 
-    int cur_state = update_state(uncertainty_score_runningmean, old_uncertainty_score_runningmean, old_sd_of_uncertainty_score_running_mean, __alpha, aggressiveness);
-    int cur_mode = select_powersaving_mode(aggressiveness);
+    // int aggressiveness = 3;
+    // int cur_state = update_state(uncertainty_score_runningmean, old_uncertainty_score_runningmean, old_sd_of_uncertainty_score_running_mean, __alpha, aggressiveness);
+    // int cur_mode = select_powersaving_mode(aggressiveness);
     constraint_buf(__uncertainty_score_buf);
     constraint_buf(__uncertainty_score_runningmean_buf);
 
-    return {uncertainty_score, uncertainty_score_runningmean, __sd_of_uncertainty_score_running_mean, cur_state, cur_mode};
+    return {uncertainty_score, uncertainty_score_runningmean, __sd_of_uncertainty_score_running_mean,cur_mode};
 
 }
 
@@ -419,67 +421,70 @@ vector<double> Uncertainty::running_var(vector<double> ma, int n, double mean_of
     return {new_mean, arg_aggrM, newsd};
 }
 
-int Uncertainty::update_state(double score, double old_ma, double old_sd, float alpha, int n){
-/*
-	Update internal state based on whether the current uncertainty score is within the range 
-    range: (old_ma - alpha * old_sd) <= uncertainty score <=  (old_ma + alpha * old_sd)
-
-    @param score: moving average of uncertainty score
-    @param old_ma: moving average of the previous frame
-    @param old_sd: standard deviation of the previous frame
-    @param alpha: arbitary parameters for determining the range
-    @param n: maximium state
-    :return __state: state of the object
-*/
-    // if (__state <= 15){
-    //     __state += 1;
-    //     return __state;
-    // } else 
-    if (score >= (old_ma-alpha*old_sd) && score <= (old_ma+alpha*old_sd)) {
-        if (__state != 15){
-            __state += 1;
-        }
-        return __state;
-    } else {
-        __state = 1;
-        return __state;
-    }
-}
-
-int Uncertainty::select_powersaving_mode(int n){
-/*
-	Classify the current frame into 5 levels (that will be output to the main program), based on their current states
-    Mode 1: least certain -> Mode 5: very certain
-    State: ranges from 0 to 15, act as progression counter within the class member
-    y = 3 log10(x) + 1
-
-    @param n: an arbitary integer, increase it if we prefer more internal states
-    :return: an integer indiating the mode
-*/
-    if (__state <= 1){
+int Uncertainty::ps_mode(bool initialised, double new_sd){
+    if (!initialised){
         return 1;
-    }else if (__state <= 3){
+    }
+
+    if (new_sd < 0.001){
         return 2;
-    }else if (__state <= 6){
+    } else if (new_sd < 0.002){
         return 3;
-    }else if (__state <= 14){
+    } else if (new_sd < 0.004){
         return 4;
-    }else{
+    } else {
         return 5;
     }
 
 }
 
-
-// void Uncertainty::set_dataSum(double &elem){
+// int Uncertainty::update_state(double score, double old_ma, double old_sd, float alpha, int n){
 // /*
-// 	Increment partial sum (update __uncertainty_score_sum)
+// 	Update internal state based on whether the current uncertainty score is within the range 
+//     range: (old_ma - alpha * old_sd) <= uncertainty score <=  (old_ma + alpha * old_sd)
 
-//     @param elem: number to be added
+//     @param score: moving average of uncertainty score
+//     @param old_ma: moving average of the previous frame
+//     @param old_sd: standard deviation of the previous frame
+//     @param alpha: arbitary parameters for determining the range
+//     @param n: maximium state
+//     :return __state: state of the object
 // */
-//     __uncertainty_score_sum += elem;
+
+//     if (score >= (old_ma-alpha*old_sd) && score <= (old_ma+alpha*old_sd)) {
+//         if (__state != 15){
+//             __state += 1;
+//         }
+//         return __state;
+//     } else {
+//         __state = 1;
+//         return __state;
+//     }
 // }
 
+// int Uncertainty::select_powersaving_mode(int n){
+// /*
+// 	Classify the current frame into 5 levels (that will be output to the main program), based on their current states
+//     Mode 1: least certain -> Mode 5: very certain
+//     State: ranges from 0 to 15, act as progression counter within the class member
+//     y = 3 log10(x) + 1
+
+//     @param n: an arbitary integer, increase it if we prefer more internal states
+//     :return: an integer indiating the mode
+// */
+//     if (__state <= 1){
+//         return 1;
+//     }else if (__state <= 3){
+//         return 2;
+//     }else if (__state <= 6){
+//         return 3;
+//     }else if (__state <= 14){
+//         return 4;
+//     }else{
+//         return 5;
+//     }
+
+// }
 
 double Uncertainty::running_mean_init(double &elem){
 /*
