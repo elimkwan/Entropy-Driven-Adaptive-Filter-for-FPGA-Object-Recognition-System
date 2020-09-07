@@ -1,19 +1,16 @@
 # RealTimeObjectRecognition
 This program is for Real Time Object Recognition with Binary Neural Network on FPGA. Our main contribution is appending an Entropy driven Adaptive Filter for a more accurate and resources efficient system. This includes:
 - Entropy-based Uncertainty Estimation {*uncertainty.cpp*}
-- Window Filter with variable step size and length {*win.cpp*}
+- Window Filter with variable step size and length {*win.cpp*} which changes dynamically based on level of uncertainty in data. Enabling us to decimate frames as well
 - Region-Of-Interest(ROI) Detection with Optical Flow and Contour Detection {*roi_filter.cpp*}
-- Power-Saving Features {*main.cpp*}
-    * Decimate frames
+- Other possible power-saving features by altering configurations in {*main.cpp*, *main-adaptivefil.cpp*, *main-uncertainty.cpp*, *main-windowfil.cpp*}
     * Dynamic clock
-    * Flexible Window Filter - alternate between varies step size based on level of uncertainty in data
     * ROI Filter - alternate between Optical Flow, Contour Detection and Reuse Past ROI based on level of uncertainty in data
 
 
 ## Folder Architecture:
 - *code/bnn_lib_tests/Makefile* is the Makefile
 - *code/bnn_lib_tests/src/\** contains all the active sources files
-- *code/bnn_lib_tests/all-main-cpp/\** contains all the cpp scripts for testing
 - *code/bnn_lib_tests/experiments/results* is the directory for active test results
 - *code/bnn_lib_tests/experiments/images* is the directory for active dataset
 - *testing/data/* contains all 12 datasets
