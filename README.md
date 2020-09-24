@@ -72,6 +72,8 @@ The command means capture 500 frames, and apply base model for adaptive filter, 
 ## Case 2: With Video Dataset as Input
 
 Experiment for analysing the performance of different adaptive filter schemes under different scenarios.
+Base Case: Low Processing Rate(30fps processing rate) with No Window Filter
+Control Case: High Processing Rate(141fps processing rate) with Window Filter of step size 10, length 14
 Scheme A is optimised for accuracy.
 Scheme B is optimised for accuracy and efficiency.
 Scheme C is optimised for accuracy and efficiency with more aggressive computational savings.
@@ -79,17 +81,25 @@ Dataset is used instead of the webcam.
 Dataset Directory: ../experiments/DatasetX (X ranges from 1 - 5)
 Output Log Directory: ../experiments/result/result-overview.csv
 
+For Base Case :
+```
+./AdaptiveFilExp base 0 0 0 0 0 0 0 0 0 0
+```
+For Control Case :
+```
+./AdaptiveFilExp control 0 0 0 0 0 0 0 0 0 0 
+```
 For Scheme A :
 ```
-./AdaptiveFilExp 1 1 10 15 12 15 1 10 10 13 
+./AdaptiveFilExp adpt 1 1 10 15 12 15 1 10 10 13 
 ```
 For Scheme B :
 ```
-./AdaptiveFilExp 1 1 15 15 15 12 15 10 10 8
+./AdaptiveFilExp adpt 1 1 15 15 15 12 15 10 10 8
 ```
 For Scheme C :
 ```
-./AdaptiveFilExp 1 1 10 8 15 12 15 10 10 6
+./AdaptiveFilExp adpt 1 1 10 8 15 12 15 10 10 6
 ```
 
 Users can also self-specified different scheme: ./BNN SS-1 WL-1 SS-2 WL-2 SS-3 WL-3 SS-4 WL-4 SS-5 WL-5 (Replace the numbers with your own StepSize and WindowLength Sets)
@@ -124,4 +134,3 @@ Run the experiment with the following command:
 
 ## Other options
 Region-of-Interst code is also embedded in the file. Users can change the roi_config in the main files from "full-roi" to "opt-roi", "cont-roi","eff-roi", which correspond to optical flow detection, contour detection and hybrid of the two
-

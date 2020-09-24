@@ -369,16 +369,16 @@ int classify_frames(){
 	
 	vector<int> dataset_list = {1,2,3,4,5};
 	vector<int> clk_list = {100};
-	vector<vector<int>> win_list(100, vector<int> (2, 0)); //10*10 = 100
+	vector<vector<int>> win_list(225, vector<int> (2, 0)); //15*15 = 225
 	int c = 1;
 	int d = 1;
-	for (int k = 0; k < 100; k++){
+	for (int k = 0; k < 225; k++){
 		win_list[k][0] = c;
 		win_list[k][1] = d;
-		if ((k+1)%10 == 0){
+		if ((k+1)%15 == 0){
 			d++;
 		}
-		if (c != 10){
+		if (c != 15){
 			c++;
 		} else{
 			c=1;
@@ -708,7 +708,8 @@ int classify_frames(){
 					{
 						cout << "ESC key is pressed by user" << endl;
 						break;
-					}	
+					}
+					
 				}
 
 				//exclude first frame from calculation
@@ -732,7 +733,6 @@ int classify_frames(){
 				// ----------------------------------------------------------------------------------------------------------------
 				// ----------------------------------------------------------------------------------------------------------------
 				// ----------------------------------------------------------------------------------------------------------------
-				
 				fs << "\n" << folder_num << "," <<  win_step << "," << win_length << "," << accuracy_adj << "," << avg_cam_fps << "," << avg_pro_fps << "," << avg_cls_fps << "," << avg_bnn << "," << avg_bnn_perc << "," << avg_win << "," << avg_win_perc << "," << avg_un << "," << avg_un_perc << "," << clk_frq ;
 			
 			}
