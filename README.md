@@ -1,3 +1,6 @@
+# Paper
+Results of the project has been documented in this paper: Entropy-Driven Adaptive Filtering for High-Accuracy and Resource-Efficient FPGA-Based Neural Network Systems https://www.mdpi.com/2079-9292/9/11/1765
+
 # RealTimeObjectRecognition
 This program is for Real Time Object Recognition with Binary Neural Network on FPGA. Our main contribution is appending an Entropy driven Adaptive Filter for a more accurate and resources efficient system. This includes:
 - Entropy-based Uncertainty Estimation {*uncertainty.cpp*}
