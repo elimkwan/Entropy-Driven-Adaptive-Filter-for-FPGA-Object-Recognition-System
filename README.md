@@ -1,3 +1,6 @@
+# Paper
+Results of the project have been documented in this paper: Entropy-Driven Adaptive Filtering for High-Accuracy and Resource-Efficient FPGA-Based Neural Network Systems https://www.mdpi.com/2079-9292/9/11/1765
+
 # RealTimeObjectRecognition
 Work Progress is documented at: https://gist.github.com/elimkwan/291b4fa29cfe936bcdbcf21526b5c6a8
 
