@@ -1,7 +1,11 @@
-# Paper
-Results of the project have been documented in this paper: Entropy-Driven Adaptive Filtering for High-Accuracy and Resource-Efficient FPGA-Based Neural Network Systems https://www.mdpi.com/2079-9292/9/11/1765
 
 # RealTimeObjectRecognition
+Displaying dynamic item in a constant lighting box:
+![demo part 1](./demo_part1.gif)
+
+The FPGA identifying the item:
+![demo part 2](./demo_part2.gif)
+
 This program is for Real Time Object Recognition with Binary Neural Network on FPGA. Our main contribution is appending an Entropy driven Adaptive Filter for a more accurate and resources efficient system. This includes:
 - Entropy-based Uncertainty Estimation {*uncertainty.cpp*}
 - Window Filter with variable step size and length {*win.cpp*} which changes dynamically based on level of uncertainty in data. Enabling us to decimate frames as well
@@ -10,6 +14,20 @@ This program is for Real Time Object Recognition with Binary Neural Network on F
     * Dynamic clock
     * ROI Filter - alternate between Optical Flow, Contour Detection and Reuse Past ROI based on level of uncertainty in data
 
+# Citation
+If you find our work useful, please cite our paper - [Entropy-Driven Adaptive Filtering for High-Accuracy and Resource-Efficient FPGA-Based Neural Network Systems](https://www.mdpi.com/2079-9292/9/11/1765)
+```
+@Article{electronics9111765,
+AUTHOR = {Kwan, Elim Yi Lam and Nunez-Yanez, Jose},
+TITLE = {Entropy-Driven Adaptive Filtering for High-Accuracy and Resource-Efficient FPGA-Based Neural Network Systems},
+JOURNAL = {Electronics},
+VOLUME = {9},
+YEAR = {2020},
+NUMBER = {11},
+ARTICLE-NUMBER = {1765},
+URL = {https://www.mdpi.com/2079-9292/9/11/1765},
+ISSN = {2079-9292},
+```
 
 ## Folder Architecture:
 - *code/bnn_lib_tests/Makefile* is the Makefile
