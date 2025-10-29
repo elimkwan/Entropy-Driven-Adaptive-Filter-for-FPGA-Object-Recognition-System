@@ -1,9 +1,11 @@
 
 # RealTimeObjectRecognition
 Displaying dynamic item in a constant lighting box:
+
 ![demo part 1](./demo_part1.gif)
 
 The FPGA identifying the item:
+
 ![demo part 2](./demo_part2.gif)
 
 This program is for Real Time Object Recognition with Binary Neural Network on FPGA. Our main contribution is appending an Entropy driven Adaptive Filter for a more accurate and resources efficient system. This includes:
